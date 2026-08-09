@@ -1,225 +1,163 @@
-// ─── State ───────────────────────────────────────────────────────────
+// ─── Diario Migrante — la portada como periódico ─────────────────────
+// El pliego reparte la edición en el orden del diseño N3:
+//   lead = historia 1 · col 1 = 2 + 5 + brief 6 · col 2 = 3 (dibujo) ·
+//   col 3 = 4 (dibujo) · banda ancha = 7 + 8.
 
-let articles = [];
-let offset = 0;
-let currentCategory = 'all';
-const LIMIT = 20;
+document.addEventListener('DOMContentLoaded', async () => {
+  setupSubscribe();
 
-// ─── Init ────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-  setDate();
-  loadArticles();
-  setupFilters();
-  setupModal();
-});
-
-// ─── Date ────────────────────────────────────────────────────────────
-
-function setDate() {
-  const el = document.getElementById('current-date');
-  const now = new Date();
-  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-  el.textContent = now.toLocaleDateString('en-US', options);
-}
-
-// ─── Load Articles ───────────────────────────────────────────────────
-
-async function loadArticles(append = false) {
+  let data = null;
   try {
-    const params = new URLSearchParams({ limit: LIMIT, offset });
-    if (currentCategory !== 'all') params.set('category', currentCategory);
+    const res = await fetch('/api/portada');
+    data = await res.json();
+  } catch (e) { console.error('portada:', e); }
 
-    const res = await fetch(`/api/articles?${params}`);
-    const data = await res.json();
-
-    if (!append) {
-      articles = data;
-      offset = 0;
-    } else {
-      articles = [...articles, ...data];
-    }
-
-    render();
-
-    // Show/hide load more
-    const wrap = document.getElementById('load-more-wrap');
-    wrap.style.display = data.length >= LIMIT ? 'block' : 'none';
-  } catch (e) {
-    console.error('Failed to load articles:', e);
-  }
-}
-
-// ─── Render ──────────────────────────────────────────────────────────
-
-function render() {
-  const heroEl = document.getElementById('hero-story');
-  const gridEl = document.getElementById('stories-grid');
-  const emptyEl = document.getElementById('empty-state');
-  const edition = document.querySelector('.edition');
-
-  if (articles.length === 0) {
-    edition.style.display = 'none';
-    emptyEl.style.display = 'block';
+  const prep = document.getElementById('prep');
+  if (!data || data.empty || !data.featured?.length) {
+    prep.textContent = 'La primera edición se está escribiendo. Vuelve pronto.';
     return;
   }
 
-  edition.style.display = 'block';
-  emptyEl.style.display = 'none';
+  const s = [...(data.featured || []), ...(data.resto || [])];
 
-  // Hero = first article
-  const hero = articles[0];
-  heroEl.querySelector('.story-category-label').textContent = formatCategory(hero.category);
-  heroEl.querySelector('.story-category-label').setAttribute('data-cat', hero.category);
-  heroEl.querySelector('.story-headline').textContent = hero.headline;
-  heroEl.querySelector('.story-summary').textContent = hero.summary;
-  heroEl.querySelector('.story-source').textContent = hero.source_name;
-  heroEl.querySelector('.story-time').textContent = timeAgo(hero.published_at);
-  heroEl.onclick = () => openArticle(hero);
+  document.getElementById('folio-fecha').textContent = formatFecha(data.date);
+  numerarEdicion(data.date);
 
-  // Grid = rest of articles, in two columns with divider
-  const rest = articles.slice(1);
-  const mid = Math.ceil(rest.length / 2);
-  const leftCol = rest.slice(0, mid);
-  const rightCol = rest.slice(mid);
-
-  gridEl.innerHTML = '';
-
-  // Left column
-  const leftDiv = document.createElement('div');
-  leftDiv.className = 'stories-col';
-  leftCol.forEach(a => leftDiv.appendChild(createStoryCard(a)));
-  gridEl.appendChild(leftDiv);
-
-  // Vertical divider
-  const divider = document.createElement('div');
-  divider.className = 'grid-divider';
-  gridEl.appendChild(divider);
-
-  // Right column
-  const rightDiv = document.createElement('div');
-  rightDiv.className = 'stories-col';
-  rightCol.forEach(a => rightDiv.appendChild(createStoryCard(a)));
-  gridEl.appendChild(rightDiv);
-}
-
-function createStoryCard(article) {
-  const el = document.createElement('article');
-  el.className = 'story';
-  el.innerHTML = `
-    <div class="story-category-label" data-cat="${article.category}">${formatCategory(article.category)}</div>
-    <h3 class="story-headline">${escapeHtml(article.headline)}</h3>
-    <p class="story-summary">${escapeHtml(article.summary)}</p>
-    <div class="story-meta">
-      <span class="story-source">${escapeHtml(article.source_name)}</span>
-      <span class="story-time">${timeAgo(article.published_at)}</span>
+  // ── Lead ──
+  const lead = document.getElementById('lead');
+  const l = s[0];
+  lead.innerHTML = `
+    <div class="lead-texto">
+      <span class="kicker">LO QUE IMPORTA HOY</span>
+      <h2 class="lead-tit">${esc(l.headline_es || l.headline)}</h2>
+      <p class="lead-resumen">${esc(l.summary_es || l.summary)}</p>
+      ${fuente(l)}
     </div>
-  `;
-  el.onclick = () => openArticle(article);
-  return el;
+    ${l.image_url ? `<figure class="lead-figura"><img src="${esc(l.image_url)}" alt="" loading="eager"></figure>` : ''}`;
+  lead.hidden = false;
+
+  // ── Banda de tres columnas ──
+  if (s.length > 1) {
+    const banda = document.getElementById('banda-1');
+    const col1 = document.createElement('div');
+    col1.className = 'col';
+    if (s[1]) col1.insertAdjacentHTML('beforeend', historia(s[1]));
+    if (s[4]) col1.insertAdjacentHTML('beforeend', `<div class="col-regla"></div>` + historia(s[4]));
+    if (s[5]) col1.insertAdjacentHTML('beforeend', `<div class="col-regla"></div>` + brief(s[5]));
+    banda.appendChild(col1);
+
+    for (const idx of [2, 3]) {
+      if (!s[idx]) continue;
+      banda.insertAdjacentHTML('beforeend', '<div class="divisor"></div>');
+      const col = document.createElement('div');
+      col.className = 'col';
+      col.insertAdjacentHTML('beforeend', historia(s[idx]));
+      if (s[idx].image_url) {
+        col.insertAdjacentHTML('beforeend', `<figure class="col-figura"><img src="${esc(s[idx].image_url)}" alt="" loading="lazy"></figure>`);
+      }
+      banda.appendChild(col);
+    }
+    banda.hidden = false;
+    document.getElementById('regla-1').hidden = false;
+  }
+
+  // ── Banda ancha (dos historias más) ──
+  if (s[6]) {
+    const banda2 = document.getElementById('banda-2');
+    banda2.insertAdjacentHTML('beforeend', `<div class="col">${historia(s[6])}</div>`);
+    if (s[7]) {
+      banda2.insertAdjacentHTML('beforeend', `<div class="divisor"></div><div class="col">${historia(s[7])}</div>`);
+    }
+    banda2.hidden = false;
+    document.getElementById('regla-2').hidden = false;
+  }
+
+  prep.hidden = true;
+});
+
+function historia(a) {
+  return `
+    <h3 class="col-tit">${esc(a.headline_es || a.headline)}</h3>
+    <p class="col-resumen">${esc(a.summary_es || a.summary)}</p>
+    ${fuente(a)}`;
 }
 
-// ─── Filters ─────────────────────────────────────────────────────────
-
-function setupFilters() {
-  document.querySelectorAll('.filter-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      currentCategory = pill.dataset.category;
-      offset = 0;
-      loadArticles();
-    });
-  });
-
-  document.getElementById('btn-load-more').addEventListener('click', () => {
-    offset += LIMIT;
-    loadArticles(true);
-  });
+function brief(a) {
+  return `
+    <h3 class="col-tit">${esc(a.headline_es || a.headline)}</h3>
+    ${fuente(a)}`;
 }
 
-// ─── Modal ───────────────────────────────────────────────────────────
-
-function setupModal() {
-  const overlay = document.getElementById('modal-overlay');
-  const closeBtn = document.getElementById('modal-close');
-
-  closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.classList.remove('open');
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') overlay.classList.remove('open');
-  });
+function fuente(a) {
+  const hora = formatHora(a.published_at);
+  const texto = `${esc(a.source_name)}${hora ? ' · ' + hora : ''}`;
+  return a.source_url
+    ? `<a class="fuente" href="${esc(a.source_url)}" target="_blank" rel="noopener">${texto}</a>`
+    : `<span class="fuente">${texto}</span>`;
 }
 
-function openArticle(article) {
-  document.getElementById('modal-category').textContent = formatCategory(article.category);
-  document.getElementById('modal-headline').textContent = article.headline;
-  document.getElementById('modal-source').textContent = article.source_name;
-  document.getElementById('modal-time').textContent = timeAgo(article.published_at);
-  document.getElementById('modal-body').innerHTML = renderMarkdown(article.body);
-  document.getElementById('modal-source-link').href = article.source_url;
-  document.getElementById('modal-overlay').classList.add('open');
+// La edición se numera contando los días publicados desde el primero.
+async function numerarEdicion(date) {
+  try {
+    const eds = await (await fetch('/api/editions')).json();
+    const idx = eds.findIndex(e => e.day === date);
+    if (idx === -1) return;
+    const num = eds.length - idx;
+    document.getElementById('folio-edicion').textContent = `EDICIÓN Nº ${num}`;
+    document.getElementById('colofon-texto').textContent =
+      `DIARIO MIGRANTE · EDICIÓN Nº ${num} · GRATIS, CADA MAÑANA A LAS 7`;
+  } catch {}
+}
+
+// ─── Subscribe ───────────────────────────────────────────────────────
+
+function setupSubscribe() {
+  const cta = document.getElementById('cta');
+  const form = document.getElementById('suscribir');
+  cta.addEventListener('click', () => {
+    form.hidden = false;
+    cta.style.display = 'none';
+    document.getElementById('email').focus();
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const note = document.getElementById('sus-note');
+    if (!email) return;
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      note.textContent = res.ok ? 'Listo. Llega cada mañana.' : 'Algo falló. Intenta de nuevo.';
+      if (res.ok) form.querySelector('input').value = '';
+    } catch {
+      note.textContent = 'Algo falló. Intenta de nuevo.';
+    }
+  });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function formatCategory(cat) {
-  const labels = {
-    policy: 'Policy',
-    visa: 'Visa & Green Card',
-    enforcement: 'Enforcement',
-    courts: 'Court Rulings',
-    asylum: 'Asylum & Refugees',
-    daca: 'DACA',
-    general: 'Immigration'
-  };
-  return labels[cat] || 'Immigration';
+function formatFecha(day) {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y, m - 1, d)
+    .toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    .toUpperCase();
 }
 
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const date = new Date(dateStr + (dateStr.includes('Z') ? '' : 'Z'));
-  const now = new Date();
-  const diff = Math.floor((now - date) / 1000);
-
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function formatHora(ts) {
+  if (!ts) return '';
+  let [h, min] = ts.slice(11, 16).split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${String(min).padStart(2, '0')} ${ampm}`;
 }
 
-function escapeHtml(str) {
+function esc(str) {
   if (!str) return '';
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
-}
-
-function renderMarkdown(md) {
-  if (!md) return '';
-  return md
-    // Headers
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-    // Bold
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // Unordered lists
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    // Paragraphs
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^(?!<[hulo])(.+)$/gm, '<p>$1</p>')
-    // Clean up
-    .replace(/<p><\/p>/g, '')
-    .replace(/<p>(<[hulo])/g, '$1')
-    .replace(/(<\/[hulo][^>]*>)<\/p>/g, '$1');
 }

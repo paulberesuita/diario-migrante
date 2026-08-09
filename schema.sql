@@ -53,6 +53,13 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
   status TEXT NOT NULL DEFAULT 'running'
 );
 
+-- One row per edition day that has been emailed (guards against double sends)
+CREATE TABLE IF NOT EXISTS edition_sends (
+  day TEXT PRIMARY KEY,
+  sent_at TEXT,
+  recipients INTEGER DEFAULT 0
+);
+
 -- Email subscribers
 CREATE TABLE IF NOT EXISTS subscribers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

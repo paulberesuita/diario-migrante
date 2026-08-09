@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>El registro — Diario Migrante</title>
+  <meta name="description" content="Todo lo que llegó hoy en noticias de inmigración, con hora y fuente. Los que están en la portada llevan su marca.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Libre+Franklin:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%279%27 fill=%27%231A1A1A%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-family=%27Georgia,serif%27 font-weight=%27bold%27 font-size=%2719%27 fill=%27white%27 text-anchor=%27middle%27%3ED%3C/text%3E%3C/svg%3E">
+  <link rel="canonical" href="https://diariomigrante.com/registro">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://diariomigrante.com/registro">
+  <meta property="og:locale" content="es_US">
+  <meta property="og:title" content="El registro — Diario Migrante">
+  <meta property="og:description" content="Todo lo que llegó hoy en noticias de inmigración, con hora y fuente.">
+  <meta property="og:image" content="https://diariomigrante.com/portada.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="pagina-registro">
+
+  <main class="registro">
+    <header class="top">
+      <a class="lockup" href="/">
+        <span class="bug">D</span>
+        <span class="marca">Diario Migrante</span>
+      </a>
+      <span class="top-der">
+        <a class="nav-link" href="/">la portada</a>
+        <span class="fecha" id="fecha"></span>
+      </span>
+    </header>
+
+    <h1 class="titulo">El registro</h1>
+    <p class="intro">Todo lo que llegó hoy. Los que están en la portada llevan <span class="dot-inline"></span></p>
+
+    <div class="rows" id="rows"></div>
+
+    <nav class="dias" id="dias" style="display:none; gap:18px; padding-top:26px;"></nav>
+
+    <footer class="pie">
+      <span class="resto-linea" id="conteo"></span>
+      <a class="nav-link" href="/">la portada →</a>
+    </footer>
+  </main>
+
+  <script src="/registro.js"></script>
+</body>
+</html>
