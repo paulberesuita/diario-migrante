@@ -291,6 +291,8 @@ async function translateArticles(items, env) {
     'Traduce estos titulares y resúmenes de noticias de inmigración al español latinoamericano neutro, ' +
     'para un sitio de noticias serio. Reglas: claro y directo, cifras y nombres propios intactos, ' +
     'sin comillas tipográficas, sin guiones largos, sin anglicismos innecesarios. ' +
+    'Los titulares además se condensan al traducir: máximo 12 palabras, recorta el relleno y las ' +
+    'subordinadas sin perder el hecho principal ni el actor. ' +
     'Devuelve SOLO un arreglo JSON con la forma [{"id": 1, "headline_es": "...", "summary_es": "..."}].\n\n' +
     JSON.stringify(payload);
 

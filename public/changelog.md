@@ -1,5 +1,9 @@
 # Diario Migrante Changelog
 
+## August 12, 2026 — Titulares de periódico
+
+- Headlines got tighter: twelve words or fewer, keeping the actor and the fact. The translator condenses each title instead of carrying the whole sentence.
+
 ## August 12, 2026 — Papel blanco
 
 - The paper prints on white now — the cream newsprint ground went clean white, on the site and in the email alike. The sheet's grain faded to a whisper, and the heavier grain moved to the desk behind the page.
