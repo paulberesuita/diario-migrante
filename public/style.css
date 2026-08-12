@@ -174,20 +174,54 @@ a.fuente:hover { text-decoration: underline; }
 
 /* Bandas anchas: el dibujo nunca compite con el lead. La historia sola
    corre texto a la izquierda y dibujo a la derecha, a tamaño columna. */
-.banda-ancha .col:only-child {
+.banda-ancha .col-sola {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1fr 280px;
   grid-template-rows: auto auto 1fr;
   gap: 10px 36px;
 }
-.banda-ancha .col:only-child .col-tit,
-.banda-ancha .col:only-child .col-resumen,
-.banda-ancha .col:only-child .fuente { grid-column: 1; }
-.banda-ancha .col:only-child .fuente { align-self: start; }
-.banda-ancha .col:only-child .col-figura { grid-column: 2; grid-row: 1 / 4; margin-top: 0; }
+.banda-ancha .col-sola .col-tit,
+.banda-ancha .col-sola .col-resumen,
+.banda-ancha .col-sola .fuente { grid-column: 1; }
+.banda-ancha .col-sola .fuente { align-self: start; }
+.banda-ancha .col-sola .col-figura { grid-column: 2; grid-row: 1 / 4; margin-top: 0; }
 
 /* En pareja, el dibujo corre a la altura de las columnas de arriba. */
-.banda-ancha .col:not(:only-child) .col-figura::before { padding-top: 62%; }
+.banda-ancha .col:not(.col-sola):not(.col-suscribir) .col-figura::before { padding-top: 62%; }
+
+/* ─── La suscripción como aviso de casa ── */
+
+.col-suscribir { flex: 0 0 280px; display: flex; flex-direction: column; gap: 12px; }
+
+.sus-linea { font-size: 15px; line-height: 1.55; color: var(--tinta-suave); }
+
+.sus-form { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+
+.sus-form input {
+  font-family: var(--sans);
+  font-size: 15px;
+  padding: 11px 14px;
+  border: 1px solid var(--regla);
+  background: #FFFFFF;
+  color: var(--tinta);
+  width: 100%;
+}
+
+.sus-form input:focus { outline: 2px solid var(--tinta); outline-offset: -1px; }
+
+.sus-form button {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 11px 18px;
+  background: var(--tinta);
+  color: var(--papel);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.col-suscribir .sus-note { text-align: left; }
 
 .banda-ancha .col-resumen { text-align: justify; }
 
@@ -209,50 +243,7 @@ a.fuente:hover { text-decoration: underline; }
   color: var(--gris-claro);
 }
 
-.colofon-cta {
-  font: inherit;
-  color: var(--tinta);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 6px 0;
-}
-
-.suscribir {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 16px 44px 0;
-}
-
-.suscribir input {
-  font-family: var(--sans);
-  font-size: 15px;
-  padding: 11px 14px;
-  border: 1px solid var(--regla);
-  background: #FFFFFF;
-  color: var(--tinta);
-  width: min(300px, 100%);
-}
-
-.suscribir input:focus { outline: 2px solid var(--tinta); outline-offset: -1px; }
-
-.suscribir button {
-  font-family: var(--sans);
-  font-weight: 600;
-  font-size: 14px;
-  padding: 11px 18px;
-  background: var(--tinta);
-  color: var(--papel);
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.sus-note { width: 100%; text-align: center; font-style: italic; font-size: 14px; color: var(--gris); }
+.sus-note { font-style: italic; font-size: 14px; color: var(--gris); }
 
 /* ─── Entrada suave ── */
 
@@ -316,13 +307,14 @@ a.fuente:hover { text-decoration: underline; }
   .col-figura img { position: static; inset: auto; width: 100%; height: auto; aspect-ratio: 1 / 1; }
 
   .banda { flex-direction: column; padding: 22px 20px 26px; gap: 18px; }
-  .banda-ancha .col:only-child { display: flex; }
-  .banda-ancha .col:only-child .col-figura { margin-top: 4px; }
+  .banda-ancha .col-sola { display: flex; }
+  .banda-ancha .col-sola .col-figura { margin-top: 4px; }
+  .col-suscribir { flex: 0 0 auto; }
   .divisor { width: auto; height: 1px; }
   .col-resumen { font-size: 16px; text-align: left; }
   .lead-resumen { font-size: 17px; }
 
-  .colofon-linea, .suscribir { padding-left: 20px; padding-right: 20px; }
+  .colofon-linea { padding-left: 20px; padding-right: 20px; }
   .registro { padding: 16px 20px 28px; }
   .fuente-inline { white-space: normal; padding-left: 4px; }
 }

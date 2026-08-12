@@ -4,8 +4,6 @@
 //   el resto en bandas anchas, de dos en dos.
 
 document.addEventListener('DOMContentLoaded', async () => {
-  setupSubscribe();
-
   let data = null;
   try {
     const res = await fetch('/api/portada');
@@ -64,11 +62,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       banda2.className = 'banda banda-ancha';
       prevBanda.after(regla, banda2);
     }
-    banda2.innerHTML = `<div class="col">${historia(s[i])}</div>` +
+    banda2.innerHTML = `<div class="col${s[i + 1] ? '' : ' col-sola'}">${historia(s[i])}</div>` +
       (s[i + 1] ? `<div class="divisor"></div><div class="col">${historia(s[i + 1])}</div>` : '');
     banda2.hidden = false;
     prevBanda = banda2;
   }
+
+  // ── La suscripción cierra la última banda, como aviso de casa ──
+  let bandaSus = prevBanda;
+  if (bandaSus.hidden) {
+    bandaSus.hidden = false;
+    document.getElementById('regla-2').hidden = false;
+  }
+  if (bandaSus.children.length) bandaSus.insertAdjacentHTML('beforeend', '<div class="divisor"></div>');
+  bandaSus.insertAdjacentHTML('beforeend', `
+    <div class="col col-suscribir">
+      <span class="kicker">SUSCRÍBETE</span>
+      <p class="sus-linea">La edición completa, gratis en tu correo, cada mañana a las 7.</p>
+      <form class="sus-form" id="suscribir">
+        <input type="email" id="email" placeholder="tu@correo.com" autocomplete="email" required>
+        <button type="submit">Recíbelo cada mañana</button>
+      </form>
+      <p class="sus-note" id="sus-note"></p>
+    </div>`);
+  setupSubscribe();
 
   prep.hidden = true;
 });
@@ -105,13 +122,8 @@ async function numerarEdicion(date) {
 // ─── Subscribe ───────────────────────────────────────────────────────
 
 function setupSubscribe() {
-  const cta = document.getElementById('cta');
   const form = document.getElementById('suscribir');
-  cta.addEventListener('click', () => {
-    form.hidden = false;
-    cta.style.display = 'none';
-    document.getElementById('email').focus();
-  });
+  if (!form) return;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('email').value.trim();

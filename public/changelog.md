@@ -1,5 +1,9 @@
 # Diario Migrante Changelog
 
+## August 12, 2026 — La suscripción entró al periódico
+
+- The subscribe box moved into the page itself: it now runs as a column beside the last story, like a paper's own house ad — SUSCRÍBETE, one line, and the form right there. The footer keeps just the colophon.
+
 ## August 12, 2026 — Titulares de periódico
 
 - Headlines got tighter: twelve words or fewer, keeping the actor and the fact. The translator condenses each title instead of carrying the whole sentence.
