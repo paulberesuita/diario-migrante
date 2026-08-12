@@ -1,7 +1,7 @@
 // ─── Diario Migrante — la portada como periódico ─────────────────────
-// El pliego reparte la edición en el orden del diseño N3:
-//   lead = historia 1 · col 1 = 2 + 5 + brief 6 · col 2 = 3 (dibujo) ·
-//   col 3 = 4 (dibujo) · banda ancha = 7 + 8.
+// Cada historia corre con su dibujo (2026-08-12). El pliego:
+//   lead = historia 1 · banda de tres = 2, 3, 4 (una por columna) ·
+//   el resto en bandas anchas, de dos en dos.
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupSubscribe();
@@ -39,37 +39,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── Banda de tres columnas ──
   if (s.length > 1) {
     const banda = document.getElementById('banda-1');
-    const col1 = document.createElement('div');
-    col1.className = 'col';
-    if (s[1]) col1.insertAdjacentHTML('beforeend', historia(s[1]));
-    if (s[4]) col1.insertAdjacentHTML('beforeend', `<div class="col-regla"></div>` + historia(s[4]));
-    if (s[5]) col1.insertAdjacentHTML('beforeend', `<div class="col-regla"></div>` + brief(s[5]));
-    banda.appendChild(col1);
-
-    for (const idx of [2, 3]) {
+    for (const idx of [1, 2, 3]) {
       if (!s[idx]) continue;
-      banda.insertAdjacentHTML('beforeend', '<div class="divisor"></div>');
+      if (banda.children.length) banda.insertAdjacentHTML('beforeend', '<div class="divisor"></div>');
       const col = document.createElement('div');
       col.className = 'col';
-      col.insertAdjacentHTML('beforeend', historia(s[idx]));
-      if (s[idx].image_url) {
-        col.insertAdjacentHTML('beforeend', `<figure class="col-figura"><img src="${esc(s[idx].image_url)}" alt="" loading="lazy"></figure>`);
-      }
+      col.innerHTML = historia(s[idx]);
       banda.appendChild(col);
     }
     banda.hidden = false;
     document.getElementById('regla-1').hidden = false;
   }
 
-  // ── Banda ancha (dos historias más) ──
-  if (s[6]) {
-    const banda2 = document.getElementById('banda-2');
-    banda2.insertAdjacentHTML('beforeend', `<div class="col">${historia(s[6])}</div>`);
-    if (s[7]) {
-      banda2.insertAdjacentHTML('beforeend', `<div class="divisor"></div><div class="col">${historia(s[7])}</div>`);
+  // ── Bandas anchas (el resto, de dos en dos) ──
+  let prevBanda = document.getElementById('banda-2');
+  for (let i = 4; i < s.length; i += 2) {
+    let banda2 = prevBanda;
+    if (i === 4) {
+      document.getElementById('regla-2').hidden = false;
+    } else {
+      const regla = document.createElement('div');
+      regla.className = 'regla-seccion';
+      banda2 = document.createElement('section');
+      banda2.className = 'banda banda-ancha';
+      prevBanda.after(regla, banda2);
     }
+    banda2.innerHTML = `<div class="col">${historia(s[i])}</div>` +
+      (s[i + 1] ? `<div class="divisor"></div><div class="col">${historia(s[i + 1])}</div>` : '');
     banda2.hidden = false;
-    document.getElementById('regla-2').hidden = false;
+    prevBanda = banda2;
   }
 
   prep.hidden = true;
@@ -79,13 +77,8 @@ function historia(a) {
   return `
     <h3 class="col-tit">${esc(a.headline_es || a.headline)}</h3>
     <p class="col-resumen">${esc(a.summary_es || a.summary)}</p>
-    ${fuente(a)}`;
-}
-
-function brief(a) {
-  return `
-    <h3 class="col-tit">${esc(a.headline_es || a.headline)}</h3>
-    ${fuente(a)}`;
+    ${fuente(a)}
+    ${a.image_url ? `<figure class="col-figura"><img src="${esc(a.image_url)}" alt="" loading="lazy"></figure>` : ''}`;
 }
 
 function fuente(a) {

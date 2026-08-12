@@ -1,8 +1,9 @@
 # Diario Migrante Changelog
 
-## August 12, 2026 — El correo trae todas las ilustraciones
+## August 12, 2026 — Todas las ilustraciones, en todas partes
 
-- The morning email now carries every story's illustration, not just the first one — the same drawings as the portada, each above its headline.
+- Every story now runs with its drawing on the front page — one story per column in the band, and extra stories flow into wide bands below. The text-only stack is retired.
+- The morning email carries every story's illustration too, each above its headline — it used to show only the first one.
 - Email subjects got short: a few sharp words about the lead story instead of the entire headline.
 
 ## August 8, 2026 — El diario llega por correo

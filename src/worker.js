@@ -415,7 +415,7 @@ async function ingestArticles(items, env) {
   let inserted = 0;
   let skipped = 0;
   const errors = [];
-  // Art for the deck: the first five stories of the batch get a doodle each.
+  // Every story runs with its drawing, on the portada and in the email.
   let artCount = 0;
 
   for (const item of items) {
@@ -434,7 +434,7 @@ async function ingestArticles(items, env) {
       const sourceId = await findOrCreateSource(item, env);
 
       let imageUrl = item.image_url || null;
-      if (!imageUrl && artCount < 5) {
+      if (!imageUrl && artCount < 8) {
         try {
           imageUrl = await generateArticleImage(item.headline, env, item.image_concept || null, {
             field: ART_FIELDS[artCount % ART_FIELDS.length]

@@ -168,6 +168,9 @@ a.fuente:hover { text-decoration: underline; }
 
 .col-figura { margin-top: 4px; flex: 1; position: relative; }
 
+/* Una historia sola en su banda lleva recorte ancho, no una torre. */
+.banda .col:only-child .col-figura::before { padding-top: 40%; }
+
 .banda-ancha .col-resumen { text-align: justify; }
 
 /* ─── Colofón ── */
