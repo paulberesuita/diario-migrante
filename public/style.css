@@ -168,8 +168,22 @@ a.fuente:hover { text-decoration: underline; }
 
 .col-figura { margin-top: 4px; flex: 1; position: relative; }
 
-/* Una historia sola en su banda lleva recorte ancho, no una torre. */
-.banda .col:only-child .col-figura::before { padding-top: 40%; }
+/* Bandas anchas: el dibujo nunca compite con el lead. La historia sola
+   corre texto a la izquierda y dibujo a la derecha, a tamaño columna. */
+.banda-ancha .col:only-child {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px 36px;
+}
+.banda-ancha .col:only-child .col-tit,
+.banda-ancha .col:only-child .col-resumen,
+.banda-ancha .col:only-child .fuente { grid-column: 1; }
+.banda-ancha .col:only-child .fuente { align-self: start; }
+.banda-ancha .col:only-child .col-figura { grid-column: 2; grid-row: 1 / 4; margin-top: 0; }
+
+/* En pareja, el dibujo corre a la altura de las columnas de arriba. */
+.banda-ancha .col:not(:only-child) .col-figura::before { padding-top: 62%; }
 
 .banda-ancha .col-resumen { text-align: justify; }
 
@@ -298,6 +312,8 @@ a.fuente:hover { text-decoration: underline; }
   .col-figura img { position: static; inset: auto; width: 100%; height: auto; aspect-ratio: 1 / 1; }
 
   .banda { flex-direction: column; padding: 22px 20px 26px; gap: 18px; }
+  .banda-ancha .col:only-child { display: flex; }
+  .banda-ancha .col:only-child .col-figura { margin-top: 4px; }
   .divisor { width: auto; height: 1px; }
   .col-resumen { font-size: 16px; text-align: left; }
   .lead-resumen { font-size: 17px; }
