@@ -1,5 +1,9 @@
 # Diario Migrante Changelog
 
+## August 12, 2026 — Papel blanco
+
+- The paper prints on white now — the cream newsprint ground went clean white, on the site and in the email alike. Same grain, same ink.
+
 ## August 12, 2026 — Todas las ilustraciones, en todas partes
 
 - The day's drawings all make the front page now — one story per column in the band, extra stories in wide bands below. The text-only stack is retired.

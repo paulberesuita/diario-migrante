@@ -540,7 +540,7 @@ function editionEmailHtml({ fecha, featured, unsubUrl }) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="outer bodybg" style="background-color:#F5F4F2;padding:36px 16px;">
 <tr><td align="center">
 <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
-<tr><td class="card" bgcolor="#EFEEEA" style="background-color:#EFEEEA;border:1px solid #C9C6C0;padding:40px 40px 34px;">
+<tr><td class="card" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border:1px solid #C9C6C0;padding:40px 40px 34px;">
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" class="ink" style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:700;color:#171512;">Diario Migrante</td></tr>
@@ -566,7 +566,7 @@ ${storiesHtml}
 function unsubPageHtml() {
   return `<!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Listo — Diario Migrante</title></head>
-<body style="margin:0;background:#EFEEEA;color:#171512;font-family:Georgia,serif;display:flex;min-height:100vh;align-items:center;justify-content:center;">
+<body style="margin:0;background:#FFFFFF;color:#171512;font-family:Georgia,serif;display:flex;min-height:100vh;align-items:center;justify-content:center;">
 <div style="text-align:center;padding:40px;">
 <div style="font-size:26px;font-weight:700;">Diario Migrante</div>
 <p style="font-size:17px;color:#3A3733;margin:18px 0 0;">Listo. Ya no te escribimos.<br>Si cambias de opinión, la portada siempre está en <a href="${ORIGIN}" style="color:#171512;">diariomigrante.com</a>.</p>
