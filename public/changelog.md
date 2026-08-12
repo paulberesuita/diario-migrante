@@ -1,5 +1,10 @@
 # Diario Migrante Changelog
 
+## August 12, 2026 — El correo trae todas las ilustraciones
+
+- The morning email now carries every story's illustration, not just the first one — the same drawings as the portada, each above its headline.
+- Email subjects got short: a few sharp words about the lead story instead of the entire headline.
+
 ## August 8, 2026 — El diario llega por correo
 
 - Subscribing works now: leave your email on the portada and each morning's edition arrives in your inbox — the five stories that matter, with a one-click way out any time.

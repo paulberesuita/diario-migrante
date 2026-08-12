@@ -267,13 +267,14 @@ async function handleAPI(path, request, env) {
     return new Response(unsubPageHtml(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
-  // POST /api/send-edition — email today's edition to subscribers now (admin; {force} re-sends)
+  // POST /api/send-edition — email today's edition to subscribers now (admin;
+  // {force} re-sends; {to} sends a test copy to one address only, guard untouched)
   if (path === '/api/send-edition' && request.method === 'POST') {
     if (!checkAuth(request, env)) {
       return new Response('{"error":"Unauthorized"}', { status: 401, headers });
     }
     const body = await request.json().catch(() => ({}));
-    const result = await sendEditionToSubscribers(env, { force: !!body.force });
+    const result = await sendEditionToSubscribers(env, { force: !!body.force, to: body.to || null });
     return new Response(JSON.stringify(result), { headers });
   }
 
@@ -492,20 +493,18 @@ function fechaLarga(day) {
     .toUpperCase();
 }
 
-function editionEmailHtml({ fecha, featured, image, unsubUrl }) {
+function editionEmailHtml({ fecha, featured, unsubUrl }) {
   const SERIF = "'Newsreader', Georgia, 'Times New Roman', serif";
   const SANS = "'Libre Franklin', -apple-system, Helvetica, Arial, sans-serif";
+  // Each story carries its own illustration, like the portada.
   const storiesHtml = featured.map((a, i) => `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     ${i > 0 ? `<tr><td class="hair" style="border-top:1px solid #C9C6C0;font-size:0;line-height:0;padding-top:22px;">&nbsp;</td></tr>` : ''}
+    ${a.image_url ? `<tr><td style="padding:0 0 16px;"><img src="${ORIGIN}${a.image_url}" alt="" width="560" class="hair" style="display:block;width:100%;max-width:560px;height:auto;border:1px solid #C9C6C0;"></td></tr>` : ''}
     <tr><td class="ink" style="font-family:${SERIF};font-size:19px;line-height:1.3;font-weight:700;color:#171512;">${esc(a.headline_es || a.headline)}</td></tr>
     <tr><td class="body" style="padding:8px 0 0;font-family:${SERIF};font-size:15.5px;line-height:1.65;color:#3A3733;">${esc(a.summary_es || a.summary)}</td></tr>
     <tr><td class="dim" style="padding:8px 0 22px;font-family:${SANS};font-size:11px;letter-spacing:1.5px;color:#6E6961;">${esc((a.source_name || '').toUpperCase())}</td></tr>
   </table>`).join('\n');
-
-  const imageHtml = image
-    ? `<tr><td style="padding:22px 0 0;"><img src="${ORIGIN}${image}" alt="" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:1px solid #C9C6C0;"></td></tr>`
-    : '';
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -546,7 +545,6 @@ function editionEmailHtml({ fecha, featured, image, unsubUrl }) {
     <tr><td align="center" class="ink" style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:700;color:#171512;">Diario Migrante</td></tr>
     <tr><td style="padding-top:12px;"><div class="rule" style="height:3px;background-color:#171512;font-size:0;line-height:0;">&nbsp;</div><div class="rule" style="height:1px;background-color:#171512;margin-top:2px;font-size:0;line-height:0;">&nbsp;</div></td></tr>
     <tr><td align="center" class="dim" style="padding:10px 0 0;font-family:${SANS};font-size:11px;letter-spacing:2.5px;color:#6E6961;">${esc(fecha)}</td></tr>
-    ${imageHtml}
     <tr><td style="padding-top:26px;">
 ${storiesHtml}
     </td></tr>
@@ -575,15 +573,54 @@ function unsubPageHtml() {
 </body></html>`;
 }
 
-async function sendEditionToSubscribers(env, { force = false } = {}) {
+// Headlines run long; the inbox wants a short line. Gemini compresses the lead
+// story into a few words, and a plain word-trim of the headline covers any failure.
+async function generateEmailSubject(lead, env) {
+  const headline = lead.headline_es || lead.headline || 'La edición de hoy';
+  const fallback = headline.split(/\s+/).slice(0, 9).join(' ');
+  if (!env.GEMINI_API_KEY) return fallback;
+
+  const prompt =
+    'Escribe el asunto de correo para la edición de hoy de un diario serio de noticias de inmigración en español. ' +
+    'Máximo 8 palabras. Directo y concreto, cifras y nombres propios intactos, sin punto final, sin comillas, ' +
+    'sin dos puntos, sin emojis, sin sensacionalismo. Devuelve SOLO el asunto.\n\n' +
+    `Noticia principal:\nTitular: ${headline}\nResumen: ${lead.summary_es || lead.summary || ''}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
+      {
+        method: 'POST',
+        headers: { 'x-goog-api-key': env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        signal: controller.signal
+      }
+    );
+    if (!res.ok) return fallback;
+    const j = await res.json();
+    const text = (j.candidates?.[0]?.content?.parts?.[0]?.text || '')
+      .trim().replace(/^["'«]|["'»]$/g, '').replace(/\.$/, '').trim();
+    if (!text || text.includes('\n') || text.split(/\s+/).length > 10 || text.length > 90) return fallback;
+    return text;
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function sendEditionToSubscribers(env, { force = false, to = null } = {}) {
   if (!env.RESEND_API_KEY) return { sent: 0, reason: 'RESEND_API_KEY not set' };
 
   const latest = await env.DB.prepare('SELECT date(published_at) AS day FROM articles ORDER BY published_at DESC LIMIT 1').first();
   if (!latest) return { sent: 0, reason: 'no editions' };
   const day = latest.day;
 
+  // A test send (`to`) never consults or writes the once-per-day guard.
   const guard = await env.DB.prepare('SELECT sent_at FROM edition_sends WHERE day = ?').bind(day).first();
-  if (guard?.sent_at && !force) return { sent: 0, reason: `edition ${day} already sent` };
+  if (guard?.sent_at && !force && !to) return { sent: 0, reason: `edition ${day} already sent` };
 
   const { results: articles } = await env.DB.prepare(
     'SELECT * FROM articles WHERE date(published_at) = ? ORDER BY published_at DESC'
@@ -594,12 +631,13 @@ async function sendEditionToSubscribers(env, { force = false } = {}) {
   if (missing.length) { try { await translateArticles(missing, env); } catch (e) { console.log('translate before send failed:', e.message); } }
 
   const featured = articles.slice(0, 5);
-  const image = featured.find(a => a.image_url)?.image_url || null;
   const fecha = fechaLarga(day);
   const lead = featured[0];
-  const subject = (lead.headline_es || lead.headline || 'La edición de hoy').slice(0, 150);
+  const subject = (await generateEmailSubject(lead, env)).slice(0, 150);
 
-  const { results: subs } = await env.DB.prepare('SELECT email FROM subscribers WHERE active = 1').all();
+  const subs = to
+    ? [{ email: String(to).trim().toLowerCase() }]
+    : (await env.DB.prepare('SELECT email FROM subscribers WHERE active = 1').all()).results;
   if (!subs.length) return { sent: 0, reason: 'no subscribers' };
 
   const from = env.EMAIL_FROM || FALLBACK_FROM;
@@ -612,7 +650,7 @@ async function sendEditionToSubscribers(env, { force = false } = {}) {
       to: [s.email],
       reply_to: REPLY_TO,
       subject,
-      html: editionEmailHtml({ fecha, featured, image, unsubUrl }),
+      html: editionEmailHtml({ fecha, featured, unsubUrl }),
       headers: {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -634,9 +672,9 @@ async function sendEditionToSubscribers(env, { force = false } = {}) {
     else errors.push({ status: r.status, detail: b });
   }
 
-  if (sent) {
+  if (sent && !to) {
     await env.DB.prepare("INSERT OR REPLACE INTO edition_sends (day, sent_at, recipients) VALUES (?, datetime('now'), ?)")
       .bind(day, sent).run();
   }
-  return { sent, day, subscribers: subs.length, ...(errors.length ? { errors } : {}) };
+  return { sent, day, subject, subscribers: subs.length, ...(errors.length ? { errors } : {}) };
 }
