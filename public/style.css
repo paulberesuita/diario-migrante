@@ -18,8 +18,8 @@
 
 body {
   /* El escritorio lleva el grano fuerte; la hoja queda casi limpia. */
-  background-color: #F5F4F2;
-  background-image: url('/grain.png'), radial-gradient(120% 90% at 50% 16%, #FDFDFC 0%, #F5F4F2 100%);
+  background-color: #F6F6F8;
+  background-image: url('/grain.png'), radial-gradient(120% 90% at 50% 16%, #FEFEFE 0%, #F4F4F6 100%);
   background-attachment: fixed;
   background-blend-mode: multiply;
   color: var(--tinta);
@@ -268,7 +268,7 @@ a.fuente:hover { text-decoration: underline; }
 
 .registro { max-width: 1024px; margin: 0 auto; background: linear-gradient(rgba(255,255,255,0.65), rgba(255,255,255,0.65)), url('/grano.png') repeat var(--papel); border: 1px solid rgba(23,21,18,0.05); padding: 24px 44px 34px; }
 
-.pagina-registro { background-color: #F5F4F2; background-image: url('/grain.png'), radial-gradient(120% 90% at 50% 16%, #FDFDFC 0%, #F5F4F2 100%); background-attachment: fixed; background-blend-mode: multiply; padding: 56px 16px 72px; font-family: var(--serif); color: var(--tinta); -webkit-font-smoothing: antialiased; }
+.pagina-registro { background-color: #F6F6F8; background-image: url('/grain.png'), radial-gradient(120% 90% at 50% 16%, #FEFEFE 0%, #F4F4F6 100%); background-attachment: fixed; background-blend-mode: multiply; padding: 56px 16px 72px; font-family: var(--serif); color: var(--tinta); -webkit-font-smoothing: antialiased; }
 
 .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--tinta); border-bottom: 1px solid var(--tinta); padding: 8px 2px; }
 
