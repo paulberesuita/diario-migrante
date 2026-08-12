@@ -2,7 +2,7 @@
 
 ## August 12, 2026 — Papel blanco
 
-- The paper prints on white now — the cream newsprint ground went clean white, on the site and in the email alike. Same grain, same ink.
+- The paper prints on white now — the cream newsprint ground went clean white, on the site and in the email alike. The sheet's grain faded to a whisper, and the heavier grain moved to the desk behind the page.
 
 ## August 12, 2026 — Todas las ilustraciones, en todas partes
 
