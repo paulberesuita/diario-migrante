@@ -2,7 +2,7 @@
 
 ## August 12, 2026 — Todas las ilustraciones, en todas partes
 
-- Every story now runs with its drawing on the front page — one story per column in the band, and extra stories flow into wide bands below. The text-only stack is retired.
+- The day's drawings all make the front page now — one story per column in the band, extra stories in wide bands below. The text-only stack is retired.
 - The morning email carries every story's illustration too, each above its headline — it used to show only the first one.
 - Email subjects got short: a few sharp words about the lead story instead of the entire headline.
 

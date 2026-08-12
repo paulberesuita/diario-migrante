@@ -415,7 +415,8 @@ async function ingestArticles(items, env) {
   let inserted = 0;
   let skipped = 0;
   const errors = [];
-  // Every story runs with its drawing, on the portada and in the email.
+  // Art budget: five drawings per edition (Paul, 2026-08-12). The first five
+  // stories get one each; on bigger days the rest run text-only.
   let artCount = 0;
 
   for (const item of items) {
@@ -434,7 +435,7 @@ async function ingestArticles(items, env) {
       const sourceId = await findOrCreateSource(item, env);
 
       let imageUrl = item.image_url || null;
-      if (!imageUrl && artCount < 8) {
+      if (!imageUrl && artCount < 5) {
         try {
           imageUrl = await generateArticleImage(item.headline, env, item.image_concept || null, {
             field: ART_FIELDS[artCount % ART_FIELDS.length]
