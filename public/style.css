@@ -191,7 +191,9 @@ a.fuente:hover { text-decoration: underline; }
 
 /* ─── La suscripción como aviso de casa ── */
 
-.col-suscribir { flex: 0 0 280px; display: flex; flex-direction: column; gap: 12px; }
+/* Centrado vertical: el aviso flota a la altura media de la banda,
+   y el aire alrededor se vuelve margen, no sobrante. */
+.col-suscribir { flex: 0 0 280px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
 
 .sus-linea { font-size: 15px; line-height: 1.55; color: var(--tinta-suave); }
 
