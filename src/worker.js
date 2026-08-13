@@ -496,17 +496,20 @@ function fechaLarga(day) {
     .toUpperCase();
 }
 
-function editionEmailHtml({ fecha, featured, unsubUrl }) {
+// The email IS the paper: no card, white sheet edge to edge, the same folio
+// rules, blackletter masthead (PNG — email clients can't load the font), and
+// hairline-divided stories like the portada.
+function editionEmailHtml({ fecha, edicion, featured, unsubUrl }) {
   const SERIF = "'Newsreader', Georgia, 'Times New Roman', serif";
   const SANS = "'Libre Franklin', -apple-system, Helvetica, Arial, sans-serif";
-  // Each story carries its own illustration, like the portada.
+
   const storiesHtml = featured.map((a, i) => `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    ${i > 0 ? `<tr><td class="hair" style="border-top:1px solid #C9C6C0;font-size:0;line-height:0;padding-top:22px;">&nbsp;</td></tr>` : ''}
-    ${a.image_url ? `<tr><td style="padding:0 0 16px;"><img src="${ORIGIN}${a.image_url}" alt="" width="560" class="hair" style="display:block;width:100%;max-width:560px;height:auto;border:1px solid #C9C6C0;"></td></tr>` : ''}
-    <tr><td class="ink" style="font-family:${SERIF};font-size:19px;line-height:1.3;font-weight:700;color:#171512;">${esc(a.headline_es || a.headline)}</td></tr>
+    ${i > 0 ? `<tr><td class="hair" style="border-top:1px solid #C9C6C0;font-size:0;line-height:0;padding-top:24px;">&nbsp;</td></tr>` : `<tr><td class="ink" style="padding:0 0 10px;font-family:${SANS};font-size:11px;font-weight:700;letter-spacing:2px;color:#171512;">LO QUE IMPORTA HOY</td></tr>`}
+    <tr><td class="ink" style="font-family:${SERIF};font-size:${i === 0 ? 26 : 19}px;line-height:1.25;font-weight:700;color:#171512;">${esc(a.headline_es || a.headline)}</td></tr>
     <tr><td class="body" style="padding:8px 0 0;font-family:${SERIF};font-size:15.5px;line-height:1.65;color:#3A3733;">${esc(a.summary_es || a.summary)}</td></tr>
-    <tr><td class="dim" style="padding:8px 0 22px;font-family:${SANS};font-size:11px;letter-spacing:1.5px;color:#6E6961;">${esc((a.source_name || '').toUpperCase())}</td></tr>
+    <tr><td class="dim" style="padding:8px 0 0;font-family:${SANS};font-size:11px;letter-spacing:1.5px;color:#6E6961;">${esc((a.source_name || '').toUpperCase())}</td></tr>
+    ${a.image_url ? `<tr><td style="padding:14px 0 24px;"><img src="${ORIGIN}${a.image_url}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;"></td></tr>` : `<tr><td style="font-size:0;line-height:0;padding-bottom:24px;">&nbsp;</td></tr>`}
   </table>`).join('\n');
 
   return `<!DOCTYPE html>
@@ -519,45 +522,63 @@ function editionEmailHtml({ fecha, featured, unsubUrl }) {
 <style>
   :root { color-scheme: light dark; supported-color-schemes: light dark; }
   body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
+  .m-oscuro { display: none; }
   @media only screen and (max-width: 640px) {
-    .outer { padding: 16px 10px !important; }
-    .card { padding: 30px 22px !important; }
+    .outer { padding: 24px 14px !important; }
   }
   @media (prefers-color-scheme: dark) {
     .bodybg { background-color: #161615 !important; }
-    .card { background-color: #1e1d1b !important; border-color: #2e2d2a !important; }
     .ink { color: #f0efe9 !important; }
     .body { color: #d6d4cc !important; }
     .dim { color: #8f8d85 !important; }
     .hair { border-color: #2e2d2a !important; }
     .rule { background-color: #f0efe9 !important; }
+    .folio { border-color: #f0efe9 !important; }
+    .m-claro { display: none !important; }
+    .m-oscuro { display: block !important; }
   }
-  [data-ogsc] .card { background-color: #1e1d1b !important; border-color: #2e2d2a !important; }
   [data-ogsc] .ink { color: #f0efe9 !important; }
   [data-ogsc] .body { color: #d6d4cc !important; }
   [data-ogsc] .dim { color: #8f8d85 !important; }
+  [data-ogsc] .hair { border-color: #2e2d2a !important; }
+  [data-ogsc] .rule { background-color: #f0efe9 !important; }
+  [data-ogsc] .folio { border-color: #f0efe9 !important; }
+  [data-ogsc] .m-claro { display: none !important; }
+  [data-ogsc] .m-oscuro { display: block !important; }
 </style>
 </head>
-<body class="bodybg" style="margin:0;padding:0;background-color:#F5F4F2;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="outer bodybg" style="background-color:#F5F4F2;padding:36px 16px;">
+<body class="bodybg" style="margin:0;padding:0;background-color:#FFFFFF;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="outer bodybg" style="background-color:#FFFFFF;padding:32px 20px 40px;">
 <tr><td align="center">
-<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
-<tr><td class="card" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border:1px solid #C9C6C0;padding:40px 40px 34px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center" class="ink" style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:700;color:#171512;">Diario Migrante</td></tr>
-    <tr><td style="padding-top:12px;"><div class="rule" style="height:3px;background-color:#171512;font-size:0;line-height:0;">&nbsp;</div><div class="rule" style="height:1px;background-color:#171512;margin-top:2px;font-size:0;line-height:0;">&nbsp;</div></td></tr>
-    <tr><td align="center" class="dim" style="padding:10px 0 0;font-family:${SANS};font-size:11px;letter-spacing:2.5px;color:#6E6961;">${esc(fecha)}</td></tr>
-    <tr><td style="padding-top:26px;">
+  <tr><td class="folio" style="border-top:1px solid #171512;border-bottom:1px solid #171512;padding:8px 2px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td class="ink" style="font-family:${SANS};font-size:10px;font-weight:600;letter-spacing:1.5px;color:#171512;">EDICI&Oacute;N N&ordm; ${edicion}</td>
+      <td class="ink" align="right" style="font-family:${SANS};font-size:10px;font-weight:600;letter-spacing:1.5px;color:#171512;">${esc(fecha)}</td>
+    </tr></table>
+  </td></tr>
+
+  <tr><td align="center" style="padding:22px 0 18px;">
+    <img class="m-claro" src="${ORIGIN}/masthead-tinta.png" alt="Diario Migrante" width="330" style="display:block;width:330px;max-width:80%;height:auto;">
+    <img class="m-oscuro" src="${ORIGIN}/masthead-papel.png" alt="Diario Migrante" width="330" style="width:330px;max-width:80%;height:auto;">
+  </td></tr>
+
+  <tr><td>
+    <div class="rule" style="height:3px;background-color:#171512;font-size:0;line-height:0;">&nbsp;</div>
+    <div class="rule" style="height:1px;background-color:#171512;margin-top:3px;font-size:0;line-height:0;">&nbsp;</div>
+  </td></tr>
+
+  <tr><td style="padding-top:26px;">
 ${storiesHtml}
-    </td></tr>
-    <tr><td class="hair" style="border-top:1px solid #C9C6C0;padding-top:20px;">
-      <p class="body" style="margin:0;font-family:${SERIF};font-size:15px;color:#3A3733;">La edición completa, con sus ilustraciones: <a class="ink" href="${ORIGIN}" style="color:#171512;">diariomigrante.com</a></p>
-      <p class="dim" style="margin:14px 0 0;font-family:${SANS};font-size:11.5px;line-height:1.6;color:#6E6961;">Recibes este correo porque te suscribiste en diariomigrante.com. Si ya no lo quieres, <a class="dim" href="${unsubUrl}" style="color:#6E6961;">cancela aquí</a>.</p>
-    </td></tr>
-  </table>
+  </td></tr>
 
-</td></tr>
+  <tr><td class="hair" style="border-top:1px solid #C9C6C0;padding-top:16px;" align="center">
+    <p class="dim" style="margin:0;font-family:${SANS};font-size:10px;letter-spacing:1.5px;color:#8A857D;">DIARIO MIGRANTE &middot; EDICI&Oacute;N N&ordm; ${edicion} &middot; GRATIS, CADA MA&Ntilde;ANA A LAS 7</p>
+    <p class="body" style="margin:16px 0 0;font-family:${SERIF};font-size:15px;color:#3A3733;">La edici&oacute;n completa: <a class="ink" href="${ORIGIN}" style="color:#171512;">diariomigrante.com</a></p>
+    <p class="dim" style="margin:12px 0 0;font-family:${SANS};font-size:11px;line-height:1.6;color:#6E6961;">Recibes este correo porque te suscribiste en diariomigrante.com. Si ya no lo quieres, <a class="dim" href="${unsubUrl}" style="color:#6E6961;">cancela aqu&iacute;</a>.</p>
+  </td></tr>
+
 </table>
 </td></tr>
 </table>
@@ -638,6 +659,13 @@ async function sendEditionToSubscribers(env, { force = false, to = null } = {}) 
   const lead = featured[0];
   const subject = (await generateEmailSubject(lead, env)).slice(0, 150);
 
+  // Edition number = how many days have published up to this one (same count
+  // the portada shows).
+  const ed = await env.DB.prepare(
+    'SELECT COUNT(DISTINCT date(published_at)) AS n FROM articles WHERE date(published_at) <= ?'
+  ).bind(day).first();
+  const edicion = ed?.n || 1;
+
   const subs = to
     ? [{ email: String(to).trim().toLowerCase() }]
     : (await env.DB.prepare('SELECT email FROM subscribers WHERE active = 1').all()).results;
@@ -653,7 +681,7 @@ async function sendEditionToSubscribers(env, { force = false, to = null } = {}) 
       to: [s.email],
       reply_to: REPLY_TO,
       subject,
-      html: editionEmailHtml({ fecha, featured, unsubUrl }),
+      html: editionEmailHtml({ fecha, edicion, featured, unsubUrl }),
       headers: {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',

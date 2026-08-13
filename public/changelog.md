@@ -1,5 +1,11 @@
 # Diario Migrante Changelog
 
+## August 13, 2026 — El correo es el periódico
+
+- The email dropped its card: it now prints edge to edge on white, like the paper itself.
+- The real blackletter masthead arrived in the inbox, with the folio rules and the edition number — the same head the front page wears.
+- Stories run with their drawings under hairline dividers, lead first with LO QUE IMPORTA HOY, colophon at the foot.
+
 ## August 12, 2026 — La suscripción entró al periódico
 
 - The subscribe box moved into the page itself: it now runs as a column beside the last story, like a paper's own house ad — SUSCRÍBETE, one line, and the form right there. The footer keeps just the colophon.
