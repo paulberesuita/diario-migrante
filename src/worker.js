@@ -1,3 +1,11 @@
+import { ORIGIN, esc, fechaLarga, portadaPage, edicionesPage, sitemapXml, notFoundPage, edicionMarkdown, llmsTxt } from './pages.js';
+import { handleMCP } from './mcp.js';
+
+const htmlResponse = (body, status = 200, maxAge = 300) => new Response(body, {
+  status,
+  headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': `public, max-age=${maxAge}` }
+});
+
 export default {
   // The daily send: 8:30 AM ET first pass, with a 10 AM ET sweep in case the
   // 7 AM routine ran late. The edition_sends guard makes the retry free.
@@ -9,6 +17,15 @@ export default {
     try {
       const url = new URL(request.url);
       const path = url.pathname;
+
+      if (url.hostname === 'www.diariomigrante.com') {
+        return Response.redirect(`${ORIGIN}${path}${url.search}`, 301);
+      }
+
+      // MCP — the paper as a tool for agents (src/mcp.js)
+      if (path === '/mcp') {
+        return handleMCP(request, env, { getPortadaData, getEditions, subscribeEmail });
+      }
 
       // API routes
       if (path.startsWith('/api/')) {
@@ -43,9 +60,61 @@ export default {
         });
       }
 
-      // Static assets are served by the [assets] config automatically
-      // Worker only receives requests that don't match static files
-      return new Response('Not found', { status: 404 });
+      // ─── Server-rendered pages (the stories live in the HTML so search
+      // engines actually read the paper) ───────────────────────────────
+
+      // Legacy dated-portada links → the permanent edition page
+      if (path === '/' && url.searchParams.get('date')) {
+        return Response.redirect(`${ORIGIN}/edicion/${url.searchParams.get('date')}`, 301);
+      }
+
+      if (path === '/') {
+        return htmlResponse(portadaPage(await getPortadaData(env, null), { home: true }));
+      }
+
+      // ─── Agent surface: markdown editions + llms.txt ─────────────────
+
+      const edicionMd = path.match(/^\/edicion\/(\d{4}-\d{2}-\d{2})\.md$/);
+      if (edicionMd || path === '/portada.md') {
+        const data = await getPortadaData(env, edicionMd ? edicionMd[1] : null);
+        if (!data || data.empty || !data.featured?.length) {
+          return new Response('No existe esa edición. El índice: https://diariomigrante.com/api/editions\n', {
+            status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+          });
+        }
+        return new Response(edicionMarkdown(data), {
+          headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'public, max-age=900' }
+        });
+      }
+
+      if (path === '/llms.txt') {
+        return new Response(llmsTxt(await getEditions(env)), {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
+        });
+      }
+
+      const edicion = path.match(/^\/edicion\/(\d{4}-\d{2}-\d{2})(\/?)$/);
+      if (edicion) {
+        if (edicion[2]) return Response.redirect(`${ORIGIN}/edicion/${edicion[1]}`, 301);
+        const data = await getPortadaData(env, edicion[1]);
+        if (!data || data.empty || !data.featured?.length) return htmlResponse(notFoundPage(), 404);
+        return htmlResponse(portadaPage(data, { home: false }), 200, 3600);
+      }
+
+      if (path === '/ediciones' || path === '/ediciones/') {
+        if (path.endsWith('/')) return Response.redirect(`${ORIGIN}/ediciones`, 301);
+        return htmlResponse(edicionesPage(await getEditions(env)));
+      }
+
+      if (path === '/sitemap.xml') {
+        return new Response(sitemapXml(await getEditions(env)), {
+          headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
+        });
+      }
+
+      // Everything else (style.css, app.js, /registro, robots.txt…) is a
+      // static asset — run_worker_first hands us the request, we hand it on.
+      return env.ASSETS.fetch(request);
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message, stack: e.stack }), {
         status: 500,
@@ -54,6 +123,26 @@ export default {
     }
   }
 };
+
+// ─── The tiny-events hub ───────────────────────────────────────────────
+// Studio-wide event collector; events land in the #tiny-events Slack channel
+// as they happen and in Paul's end-of-day digest. Fire-and-forget — a hub
+// outage never breaks the paper.
+
+const EVENTS_URL = 'https://tiny-events.tinybuild.workers.dev/api/event';
+
+async function postEvent(env, { type, title, body, url }) {
+  if (!env.EVENTS_TOKEN) return;
+  try {
+    await fetch(EVENTS_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.EVENTS_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product: 'diariomigrante', type, title, body, url }),
+    });
+  } catch (e) {
+    console.error('event post failed:', e);
+  }
+}
 
 // ─── API ────────────────────────────────────────────────────────────────
 
@@ -98,67 +187,14 @@ async function handleAPI(path, request, env) {
   }
 
   // GET /api/portada — one edition in the D1 design's shape: the five that matter + the rest.
-  // Lazily translates missing Spanish fields via Gemini and caches them in D1.
   if (path === '/api/portada') {
-    const url = new URL(request.url);
-    let date = url.searchParams.get('date');
-    if (!date) {
-      const latest = await env.DB.prepare('SELECT date(published_at) AS day FROM articles ORDER BY published_at DESC LIMIT 1').first();
-      if (!latest) return new Response(JSON.stringify({ empty: true }), { headers });
-      date = latest.day;
-    }
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM articles WHERE date(published_at) = ? ORDER BY published_at DESC'
-    ).bind(date).all();
-
-    let translateError = null;
-    const missing = results.filter(a => !a.headline_es || !a.summary_es).slice(0, 20);
-    if (missing.length) {
-      try { await translateArticles(missing, env); } catch (e) { translateError = e.message; }
-    }
-
-    const featured = results.slice(0, 5);
-    const ids = new Set(featured.map(a => a.id));
-    const image = featured.find(a => a.image_url)?.image_url || null;
-    return new Response(JSON.stringify({
-      date,
-      total: results.length,
-      image,
-      featured,
-      resto: results.filter(a => !ids.has(a.id)),
-      ...(translateError ? { translate_error: translateError } : {})
-    }), { headers });
+    const data = await getPortadaData(env, new URL(request.url).searchParams.get('date'));
+    return new Response(JSON.stringify(data), { headers });
   }
 
-  // TEMP: doodle on an exact background color test (no DB writes)
-  if (path === '/api/_test2') {
-    const prompt =
-      'A minimalistic illustration in the form of doodles, a single black ink pen line drawn on a plain completely flat ' +
-      'solid background of exactly the color hex 3A86FF, a vivid azure blue, uniform across the entire canvas with no ' +
-      'texture, no gradient, no vignette. Extremely simple shapes, an imperfect handmade line, slightly uncomfortable ' +
-      'proportions, a lot of empty space, indie zine illustration style, no realism, no shading. ' +
-      'A recent graduate in a gown looks up at an enormous stack of coins twice their height, holding a small rolled blank scroll. ' +
-      'The ink line stays pure black. Absolutely no logos, no text, no letters, no numbers anywhere.';
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent', {
-      method: 'POST',
-      headers: { 'x-goog-api-key': env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { imageConfig: { aspectRatio: '4:5' } } })
-    });
-    const j = await res.json();
-    for (const c of j.candidates || []) for (const pt of c.content?.parts || []) if (pt.inlineData?.data) {
-      const key = `img/${crypto.randomUUID()}.jpg`;
-      await env.BUCKET.put(key, base64ToBytes(pt.inlineData.data), { httpMetadata: { contentType: pt.inlineData.mimeType || 'image/jpeg' } });
-      return new Response(JSON.stringify({ a: `/${key}` }), { headers });
-    }
-    return new Response('{"error":"no image"}', { status: 500, headers });
-  }
-
-  // GET /api/editions — one row per day that has articles, newest first
+  // GET /api/editions — one row per day that has articles, newest first.
   if (path === '/api/editions') {
-    const { results } = await env.DB.prepare(
-      'SELECT date(published_at) AS day, COUNT(*) AS count FROM articles GROUP BY day ORDER BY day DESC'
-    ).all();
-    return new Response(JSON.stringify(results), { headers });
+    return new Response(JSON.stringify(await getEditions(env)), { headers });
   }
 
   // GET /api/article/:id
@@ -197,8 +233,18 @@ async function handleAPI(path, request, env) {
       const body = await request.json();
       const items = Array.isArray(body.articles) ? body.articles : [];
       const result = await ingestArticles(items, env);
+      const notes = [];
+      if (result.skipped) notes.push(`${result.skipped} duplicate${result.skipped === 1 ? '' : 's'} skipped`);
+      if (result.errors.length) notes.push(`${result.errors.length} failed`);
+      await postEvent(env, {
+        type: !result.inserted && result.errors.length ? 'error' : 'event',
+        title: `Morning ingest — ${result.inserted} new stor${result.inserted === 1 ? 'y' : 'ies'}`,
+        body: notes.join(' · ') || null,
+        url: 'https://diariomigrante.com',
+      });
       return new Response(JSON.stringify(result), { headers });
     } catch (e) {
+      await postEvent(env, { type: 'error', title: 'Ingest crashed', body: e.message });
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
     }
   }
@@ -244,8 +290,8 @@ async function handleAPI(path, request, env) {
     try {
       const { email, name } = await request.json();
       if (!email) return new Response('{"error":"Email required"}', { status: 400, headers });
-      await env.DB.prepare('INSERT OR IGNORE INTO subscribers (email, name) VALUES (?, ?)')
-        .bind(String(email).trim().toLowerCase(), name || null).run();
+      const r = await subscribeEmail(env, email, name);
+      if (!r.ok) return new Response('{"error":"Invalid email"}', { status: 400, headers });
       return new Response('{"success":true}', { headers });
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
@@ -262,7 +308,11 @@ async function handleAPI(path, request, env) {
     if (!email || t !== expect) {
       return new Response('Enlace inválido.', { status: 400, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
-    await env.DB.prepare('UPDATE subscribers SET active = 0 WHERE lower(email) = ?').bind(email).run();
+    const r = await env.DB.prepare('UPDATE subscribers SET active = 0 WHERE lower(email) = ? AND active = 1').bind(email).run();
+    if (r.meta.changes > 0) {
+      const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE active = 1').first();
+      await postEvent(env, { type: 'subscriber', title: 'Unsubscribed', body: `${email} — ${n.n} left` });
+    }
     if (request.method === 'POST') return new Response(null, { status: 200 });
     return new Response(unsubPageHtml(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
@@ -279,6 +329,65 @@ async function handleAPI(path, request, env) {
   }
 
   return new Response('{"error":"Not found"}', { status: 404, headers });
+}
+
+// Shared by /api/subscribe and the MCP suscribir tool.
+async function subscribeEmail(env, email, name = null) {
+  const addr = String(email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr) || addr.length > 254) {
+    return { ok: false };
+  }
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO subscribers (email, name) VALUES (?, ?)')
+    .bind(addr, name ? String(name).slice(0, 120) : null).run();
+  if (r.meta.changes > 0) {
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE active = 1').first();
+    await postEvent(env, { type: 'subscriber', title: 'New subscriber', body: `${addr} — ${n.n} active` });
+  }
+  return { ok: true, nuevo: r.meta.changes > 0, email: addr };
+}
+
+// ─── EDITION DATA (shared by the API and the server-rendered pages) ────
+
+// Lazily translates missing Spanish fields via Gemini and caches them in D1.
+async function getPortadaData(env, date) {
+  if (!date) {
+    const latest = await env.DB.prepare('SELECT date(published_at) AS day FROM articles ORDER BY published_at DESC LIMIT 1').first();
+    if (!latest) return { empty: true };
+    date = latest.day;
+  }
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM articles WHERE date(published_at) = ? ORDER BY published_at DESC'
+  ).bind(date).all();
+
+  let translateError = null;
+  const missing = results.filter(a => !a.headline_es || !a.summary_es).slice(0, 20);
+  if (missing.length) {
+    try { await translateArticles(missing, env); } catch (e) { translateError = e.message; }
+  }
+
+  const featured = results.slice(0, 5);
+  const ids = new Set(featured.map(a => a.id));
+  return {
+    date,
+    total: results.length,
+    image: featured.find(a => a.image_url)?.image_url || null,
+    featured,
+    resto: results.filter(a => !ids.has(a.id)),
+    ...(translateError ? { translate_error: translateError } : {})
+  };
+}
+
+// One row per day that has articles, newest first, each carrying its lead
+// headline (Spanish when cached) for the índice.
+async function getEditions(env) {
+  const { results } = await env.DB.prepare(
+    `SELECT date(a.published_at) AS day, COUNT(*) AS count,
+       (SELECT COALESCE(b.headline_es, b.headline) FROM articles b
+        WHERE date(b.published_at) = date(a.published_at)
+        ORDER BY b.published_at DESC LIMIT 1) AS lead
+     FROM articles a GROUP BY date(a.published_at) ORDER BY day DESC`
+  ).all();
+  return results;
 }
 
 // ─── SPANISH TRANSLATION (Gemini, cached in D1) ────────────────────────
@@ -475,13 +584,8 @@ async function ingestArticles(items, env) {
 // From resend.dev until diariomigrante.com is verified on Resend; flip
 // EMAIL_FROM in wrangler.toml when it is.
 
-const ORIGIN = 'https://diariomigrante.com';
 const FALLBACK_FROM = 'Diario Migrante <onboarding@resend.dev>';
 const REPLY_TO = 'paul.beresuita@gmail.com';
-
-function esc(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 async function unsubToken(email, secret) {
   const enc = new TextEncoder();
@@ -490,26 +594,20 @@ async function unsubToken(email, secret) {
   return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
 }
 
-function fechaLarga(day) {
-  return new Date(`${day}T12:00:00Z`)
-    .toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-    .toUpperCase();
-}
-
 // The email IS the paper: no card, white sheet edge to edge, the same folio
 // rules, blackletter masthead (PNG — email clients can't load the font), and
 // hairline-divided stories like the portada.
-function editionEmailHtml({ fecha, edicion, featured, unsubUrl }) {
+function editionEmailHtml({ fecha, featured, unsubUrl }) {
   const SERIF = "'Newsreader', Georgia, 'Times New Roman', serif";
   const SANS = "'Libre Franklin', -apple-system, Helvetica, Arial, sans-serif";
 
   const storiesHtml = featured.map((a, i) => `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     ${i > 0 ? `<tr><td class="hair" style="border-top:1px solid #C9C6C0;font-size:0;line-height:0;padding-top:24px;">&nbsp;</td></tr>` : `<tr><td class="ink" style="padding:0 0 10px;font-family:${SANS};font-size:11px;font-weight:700;letter-spacing:2px;color:#171512;">LO QUE IMPORTA HOY</td></tr>`}
-    <tr><td class="ink" style="font-family:${SERIF};font-size:${i === 0 ? 26 : 19}px;line-height:1.25;font-weight:700;color:#171512;">${esc(a.headline_es || a.headline)}</td></tr>
+    <tr><td class="ink" style="font-family:${SERIF};font-size:${i === 0 ? 26 : 19}px;line-height:1.25;font-weight:700;color:#171512;">${a.source_url ? `<a class="ink" href="${esc(a.source_url)}" style="color:#171512;text-decoration:none;">${esc(a.headline_es || a.headline)}</a>` : esc(a.headline_es || a.headline)}</td></tr>
     <tr><td class="body" style="padding:8px 0 0;font-family:${SERIF};font-size:15.5px;line-height:1.65;color:#3A3733;">${esc(a.summary_es || a.summary)}</td></tr>
-    <tr><td class="dim" style="padding:8px 0 0;font-family:${SANS};font-size:11px;letter-spacing:1.5px;color:#6E6961;">${esc((a.source_name || '').toUpperCase())}</td></tr>
-    ${a.image_url ? `<tr><td style="padding:14px 0 24px;"><img src="${ORIGIN}${a.image_url}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;"></td></tr>` : `<tr><td style="font-size:0;line-height:0;padding-bottom:24px;">&nbsp;</td></tr>`}
+    <tr><td class="dim" style="padding:8px 0 0;font-family:${SANS};font-size:11px;letter-spacing:1.5px;color:#6E6961;">${a.source_url ? `<a class="dim" href="${esc(a.source_url)}" style="color:#6E6961;text-decoration:none;">LEER EN ${esc((a.source_name || '').toUpperCase())} &#8599;</a>` : esc((a.source_name || '').toUpperCase())}</td></tr>
+    ${a.image_url ? `<tr><td style="padding:14px 0 24px;"><img src="${ORIGIN}${a.image_url}" alt="" width="600" height="600" style="display:block;width:100%;max-width:600px;height:auto;"></td></tr>` : `<tr><td style="font-size:0;line-height:0;padding-bottom:24px;">&nbsp;</td></tr>`}
   </table>`).join('\n');
 
   return `<!DOCTYPE html>
@@ -548,20 +646,20 @@ function editionEmailHtml({ fecha, edicion, featured, unsubUrl }) {
 </style>
 </head>
 <body class="bodybg" style="margin:0;padding:0;background-color:#FFFFFF;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="outer bodybg" style="background-color:#FFFFFF;padding:32px 20px 40px;">
-<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bodybg" style="background-color:#FFFFFF;">
+<tr><td align="center" class="outer" style="padding:32px 20px 40px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
 
   <tr><td class="folio" style="border-top:1px solid #171512;border-bottom:1px solid #171512;padding:8px 2px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td class="ink" style="font-family:${SANS};font-size:10px;font-weight:600;letter-spacing:1.5px;color:#171512;">EDICI&Oacute;N N&ordm; ${edicion}</td>
+      <td class="ink" style="font-family:${SANS};font-size:10px;font-weight:600;letter-spacing:1.5px;color:#171512;">NOTICIAS DE INMIGRACI&Oacute;N</td>
       <td class="ink" align="right" style="font-family:${SANS};font-size:10px;font-weight:600;letter-spacing:1.5px;color:#171512;">${esc(fecha)}</td>
     </tr></table>
   </td></tr>
 
   <tr><td align="center" style="padding:22px 0 18px;">
-    <img class="m-claro" src="${ORIGIN}/masthead-tinta.png" alt="Diario Migrante" width="330" style="display:block;width:330px;max-width:80%;height:auto;">
-    <img class="m-oscuro" src="${ORIGIN}/masthead-papel.png" alt="Diario Migrante" width="330" style="width:330px;max-width:80%;height:auto;">
+    <img class="m-claro" src="${ORIGIN}/masthead-tinta.png" alt="Diario Migrante" width="330" height="50" style="display:block;width:330px;max-width:80%;height:auto;">
+    <img class="m-oscuro" src="${ORIGIN}/masthead-papel.png" alt="Diario Migrante" width="330" height="50" style="width:330px;max-width:80%;height:auto;">
   </td></tr>
 
   <tr><td>
@@ -574,10 +672,12 @@ ${storiesHtml}
   </td></tr>
 
   <tr><td class="hair" style="border-top:1px solid #C9C6C0;padding-top:16px;" align="center">
-    <p class="dim" style="margin:0;font-family:${SANS};font-size:10px;letter-spacing:1.5px;color:#8A857D;">DIARIO MIGRANTE &middot; EDICI&Oacute;N N&ordm; ${edicion} &middot; GRATIS, CADA MA&Ntilde;ANA A LAS 7</p>
+    <p class="dim" style="margin:0;font-family:${SANS};font-size:10px;letter-spacing:1.5px;color:#8A857D;">DIARIO MIGRANTE &middot; GRATIS, CADA MA&Ntilde;ANA A LAS 7</p>
     <p class="body" style="margin:16px 0 0;font-family:${SERIF};font-size:15px;color:#3A3733;">La edici&oacute;n completa: <a class="ink" href="${ORIGIN}" style="color:#171512;">diariomigrante.com</a></p>
     <p class="dim" style="margin:12px 0 0;font-family:${SANS};font-size:11px;line-height:1.6;color:#6E6961;">Recibes este correo porque te suscribiste en diariomigrante.com. Si ya no lo quieres, <a class="dim" href="${unsubUrl}" style="color:#6E6961;">cancela aqu&iacute;</a>.</p>
   </td></tr>
+
+  <tr><td style="height:48px;font-size:0;line-height:0;">&nbsp;</td></tr>
 
 </table>
 </td></tr>
@@ -681,7 +781,7 @@ async function sendEditionToSubscribers(env, { force = false, to = null } = {}) 
       to: [s.email],
       reply_to: REPLY_TO,
       subject,
-      html: editionEmailHtml({ fecha, edicion, featured, unsubUrl }),
+      html: editionEmailHtml({ fecha, featured, unsubUrl }),
       headers: {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -706,6 +806,14 @@ async function sendEditionToSubscribers(env, { force = false, to = null } = {}) 
   if (sent && !to) {
     await env.DB.prepare("INSERT OR REPLACE INTO edition_sends (day, sent_at, recipients) VALUES (?, datetime('now'), ?)")
       .bind(day, sent).run();
+    await postEvent(env, {
+      title: `Edición Nº ${edicion} sent — ${sent} subscriber${sent === 1 ? '' : 's'}`,
+      body: subject,
+      url: 'https://diariomigrante.com',
+    });
+  }
+  if (errors.length && !to) {
+    await postEvent(env, { type: 'error', title: 'Edition send hit Resend errors', body: JSON.stringify(errors).slice(0, 500) });
   }
   return { sent, day, subject, subscribers: subs.length, ...(errors.length ? { errors } : {}) };
 }

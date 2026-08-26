@@ -1,5 +1,42 @@
 # Diario Migrante Changelog
 
+## August 25, 2026 — Cada noticia lleva a su fuente
+
+- Every story in the morning email is a link now. Tap the headline, or the "Leer en …" line under it, and you land on the original article — the paper's whole stance is analysis over real sources, and the email finally shows them.
+- The email no longer gets cut off at the bottom in the Gmail app on iPhone. The illustrations now declare their size up front, so the app reserves the room before they load and the last lines — the link to the full edition, the unsubscribe line — stay on screen.
+
+## August 16, 2026 — El sombrero
+
+- The paper has a mark now: a reporter's hat with a DM press card tucked in the band. It lives in the browser tab — look up. The masthead stays pure blackletter.
+
+## August 16, 2026 — El diario es una herramienta
+
+- The paper is a full MCP server now — the standard plug AI assistants use to connect to tools. Point Claude (or any MCP client) at **diariomigrante.com/mcp** and the paper answers directly: read any edition, search all past coverage by keyword, pull a full article, or subscribe a reader — five tools, no key required.
+- In Claude Code, one line connects it: `claude mcp add --transport http diario https://diariomigrante.com/mcp`. On claude.ai it's a custom connector with the same address.
+
+## August 16, 2026 — El diario habla con agentes
+
+- The paper now serves AI agents as readers in their own right. **diariomigrante.com/llms.txt** is the guide: what the paper is, every recent edition, and the full open API.
+- Any edition reads as clean text now — add **.md** to its address (`/edicion/2026-08-16.md`), or ask for **/portada.md** and get today's paper: headlines, summaries, and source links, no HTML in the way.
+- An agent can even subscribe a reader through the API, and robots.txt now says plainly that search engines and AI assistants are welcome to read the news.
+
+## August 16, 2026 — Cada edición, su dirección
+
+- Every edition now has a permanent address: **diariomigrante.com/edicion/2026-08-16** is that morning's front page, forever. Share a day, link a day — the índice rows point there now.
+- The paper prints on the server: stories arrive in the page itself instead of assembling in your browser, so search engines — and anyone with JavaScript off — finally read the news instead of a blank sheet.
+- A sitemap hands Google the whole archive, edition by edition.
+
+## August 14, 2026 — La hemeroteca
+
+- The paper has a back-issues index now: **diariomigrante.com/ediciones** lists every edition, grouped by month — date, lead headline, and story count on each line, dot leaders and all.
+- Every row opens that day's actual front page: the portada now prints any past edition, not just today's.
+- **EDICIONES ANTERIORES** in the front page's dateline is the door.
+
+## August 13, 2026 — La tarifa de suscripción
+
+- The subscribe ad now quotes its terms like an old paper's rate card, dot leaders and all: Entrega … 7:00 de la mañana · Edición … Lunes a domingo · Precio … **Gratis**. The one-line pitch is retired.
+- The whole box got quieter — pale hairlines instead of heavy rules, and a slimmer button.
+
 ## August 13, 2026 — El correo es el periódico
 
 - The email dropped its card: it now prints edge to edge on white, like the paper itself.

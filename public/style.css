@@ -8,6 +8,8 @@
   --gris: #6E6961;
   --gris-claro: #8A857D;
   --regla: #C9C6C0;
+  --regla-palida: #E2DFDA;
+  --puntos: #D9D6D0;
   --papel: #FFFFFF;
   --serif: 'Newsreader', Georgia, serif;
   --sans: 'Libre Franklin', -apple-system, sans-serif;
@@ -193,11 +195,25 @@ a.fuente:hover { text-decoration: underline; }
 
 /* Centrado vertical: el aviso flota a la altura media de la banda,
    y el aire alrededor se vuelve margen, no sobrante. */
-.col-suscribir { flex: 0 0 280px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+.col-suscribir { flex: 0 0 280px; display: flex; flex-direction: column; gap: 14px; justify-content: center; }
 
-.sus-linea { font-size: 15px; line-height: 1.55; color: var(--tinta-suave); }
+/* La tarifa: rubro, puntos conductores, dato — el aviso cotiza en cero. */
+.sus-tarifa {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--regla-palida);
+  border-bottom: 1px solid var(--regla-palida);
+  padding: 14px 0;
+}
 
-.sus-form { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.tarifa-fila { display: flex; align-items: baseline; gap: 10px; }
+.tarifa-rubro { font-size: 15px; color: var(--tinta-suave); flex-shrink: 0; }
+.tarifa-puntos { flex: 1; border-bottom: 1px dotted var(--puntos); }
+.tarifa-dato { font-size: 15px; color: var(--tinta); flex-shrink: 0; }
+.tarifa-gratis { font-weight: 600; }
+
+.sus-form { display: flex; flex-direction: column; gap: 14px; }
 
 .sus-form input {
   font-family: var(--sans);
@@ -214,13 +230,14 @@ a.fuente:hover { text-decoration: underline; }
 .sus-form button {
   font-family: var(--sans);
   font-weight: 600;
-  font-size: 14px;
-  padding: 11px 18px;
+  font-size: 13px;
+  padding: 9px 18px;
   background: var(--tinta);
   color: var(--papel);
   border: none;
   border-radius: 3px;
   cursor: pointer;
+  align-self: flex-start;
 }
 
 .col-suscribir .sus-note { text-align: left; }
@@ -255,6 +272,75 @@ a.fuente:hover { text-decoration: underline; }
   .banda { animation-delay: 0.08s; }
   .banda-ancha { animation-delay: 0.16s; }
   @keyframes aparecer { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+}
+
+/* ─── Ediciones (el índice) ── */
+
+a.folio-item:hover { text-decoration: underline; }
+.masthead a { color: inherit; text-decoration: none; }
+
+.ediciones { padding: 30px 44px 46px; }
+
+.ediciones .titulo {
+  font-weight: 600;
+  font-size: clamp(30px, 4.4vw, 38px);
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  padding: 8px 0 24px;
+}
+
+.ediciones .prep { padding: 20px 0 40px; text-align: left; }
+
+.ed-grupo + .ed-grupo { padding-top: 30px; }
+
+.ed-mes { display: flex; align-items: center; gap: 14px; padding-bottom: 8px; }
+.ed-mes span {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--tinta);
+  flex-shrink: 0;
+}
+.ed-mes i { flex: 1; height: 1px; background: var(--regla); }
+
+.ed-fila {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--regla-palida);
+  text-decoration: none;
+  color: var(--tinta);
+}
+
+/* La fecha apilada: número grande en serif, día completo en versalitas. */
+.ed-fecha { display: flex; flex-direction: column; gap: 2px; width: 96px; flex-shrink: 0; }
+
+.ed-dia { font-family: var(--serif); font-weight: 400; font-size: 21px; line-height: 24px; color: var(--tinta); }
+
+.ed-nombre {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--gris-claro);
+}
+
+.ed-resto { display: flex; align-items: baseline; gap: 16px; flex: 1; min-width: 0; }
+
+.ed-tit { font-size: 19px; line-height: 1.25; min-width: 0; }
+.ed-fila:hover .ed-tit { text-decoration: underline; }
+
+.ed-puntos { flex: 1; border-bottom: 1px dotted var(--puntos); min-width: 28px; }
+
+.ed-conteo {
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--gris);
+  flex-shrink: 0;
 }
 
 /* ─── El registro ── */
@@ -318,5 +404,11 @@ a.fuente:hover { text-decoration: underline; }
 
   .colofon-linea { padding-left: 20px; padding-right: 20px; }
   .registro { padding: 16px 20px 28px; }
+
+  .ediciones { padding: 22px 20px 34px; }
+  .ed-fecha { width: 72px; }
+  .ed-resto { flex-wrap: wrap; gap: 4px 12px; }
+  .ed-puntos { display: none; }
+  .ed-tit { flex: 1 1 100%; font-size: 18px; }
   .fuente-inline { white-space: normal; padding-left: 4px; }
 }
