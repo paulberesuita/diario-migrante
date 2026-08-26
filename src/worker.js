@@ -1,9 +1,20 @@
-import { ORIGIN, esc, fechaLarga, portadaPage, edicionesPage, sitemapXml, notFoundPage, edicionMarkdown, llmsTxt } from './pages.js';
+import { ORIGIN, esc, fechaLarga, portadaPage, edicionesPage, sitemapXml, notFoundPage, edicionMarkdown, llmsTxt, noticiaPage, noticiaMarkdown, noticiaPath } from './pages.js';
 import { handleMCP } from './mcp.js';
 
 const htmlResponse = (body, status = 200, maxAge = 300) => new Response(body, {
   status,
   headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': `public, max-age=${maxAge}` }
+});
+
+// The markdown twins are for agents, not search: noindex, and each one names
+// its HTML canonical so Google never files them as duplicates.
+const mdResponse = (body, canonical, maxAge = 900) => new Response(body, {
+  headers: {
+    'Content-Type': 'text/markdown; charset=utf-8',
+    'Cache-Control': `public, max-age=${maxAge}`,
+    'X-Robots-Tag': 'noindex',
+    'Link': `<${canonical}>; rel="canonical"`
+  }
 });
 
 export default {
@@ -18,13 +29,13 @@ export default {
       const url = new URL(request.url);
       const path = url.pathname;
 
-      if (url.hostname === 'www.diariomigrante.com') {
+      if (url.hostname === 'www.diariomigrante.com' || url.protocol === 'http:') {
         return Response.redirect(`${ORIGIN}${path}${url.search}`, 301);
       }
 
       // MCP — the paper as a tool for agents (src/mcp.js)
       if (path === '/mcp') {
-        return handleMCP(request, env, { getPortadaData, getEditions, subscribeEmail });
+        return handleMCP(request, env, { getPortadaData, getEditions, subscribeEmail, getNoticia });
       }
 
       // API routes
@@ -69,7 +80,9 @@ export default {
       }
 
       if (path === '/') {
-        return htmlResponse(portadaPage(await getPortadaData(env, null), { home: true }));
+        const data = await getPortadaData(env, null);
+        const { prev } = data.empty ? { prev: null } : await getEditionNeighbors(env, data.date);
+        return htmlResponse(portadaPage(data, { home: true, prev }));
       }
 
       // ─── Agent surface: markdown editions + llms.txt ─────────────────
@@ -82,9 +95,29 @@ export default {
             status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
           });
         }
-        return new Response(edicionMarkdown(data), {
-          headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'public, max-age=900' }
-        });
+        return mdResponse(edicionMarkdown(data), edicionMd ? `${ORIGIN}/edicion/${edicionMd[1]}` : `${ORIGIN}/`);
+      }
+
+      // ─── Each story on its own sheet: /noticia/:id/:slug (+ .md twin) ──
+
+      const noticiaMd = path.match(/^\/noticia\/(\d+)(?:\/[^/]*)?\.md$/);
+      if (noticiaMd) {
+        const a = await getNoticia(env, noticiaMd[1]);
+        if (!a) return new Response('No existe esa noticia.\n', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+        return mdResponse(noticiaMarkdown(a), `${ORIGIN}${noticiaPath(a)}`);
+      }
+
+      const noticia = path.match(/^\/noticia\/(\d+)(?:\/([^/]*))?\/?$/);
+      if (noticia) {
+        const a = await getNoticia(env, noticia[1]);
+        if (!a) return htmlResponse(notFoundPage(), 404);
+        const canon = noticiaPath(a);
+        if (path !== canon) return Response.redirect(`${ORIGIN}${canon}`, 301);
+        const day = a.published_at.slice(0, 10);
+        const { results: others } = await env.DB.prepare(
+          'SELECT id, headline, headline_es, source_name FROM articles WHERE date(published_at) = ? AND id != ? ORDER BY published_at DESC'
+        ).bind(day, a.id).all();
+        return htmlResponse(noticiaPage(a, { others }), 200, 3600);
       }
 
       if (path === '/llms.txt') {
@@ -98,7 +131,8 @@ export default {
         if (edicion[2]) return Response.redirect(`${ORIGIN}/edicion/${edicion[1]}`, 301);
         const data = await getPortadaData(env, edicion[1]);
         if (!data || data.empty || !data.featured?.length) return htmlResponse(notFoundPage(), 404);
-        return htmlResponse(portadaPage(data, { home: false }), 200, 3600);
+        const { prev, next } = await getEditionNeighbors(env, data.date);
+        return htmlResponse(portadaPage(data, { home: false, prev, next }), 200, 3600);
       }
 
       if (path === '/ediciones' || path === '/ediciones/') {
@@ -107,7 +141,10 @@ export default {
       }
 
       if (path === '/sitemap.xml') {
-        return new Response(sitemapXml(await getEditions(env)), {
+        const { results: arts } = await env.DB.prepare(
+          'SELECT id, headline, headline_es, date(published_at) AS day FROM articles ORDER BY published_at DESC'
+        ).all();
+        return new Response(sitemapXml(await getEditions(env), arts), {
           headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
         });
       }
@@ -377,6 +414,29 @@ async function getPortadaData(env, date) {
   };
 }
 
+// The editions either side of a day, for prev/next links.
+async function getEditionNeighbors(env, day) {
+  const prev = await env.DB.prepare('SELECT date(published_at) AS day FROM articles WHERE date(published_at) < ? ORDER BY published_at DESC LIMIT 1').bind(day).first();
+  const next = await env.DB.prepare('SELECT date(published_at) AS day FROM articles WHERE date(published_at) > ? ORDER BY published_at ASC LIMIT 1').bind(day).first();
+  return { prev: prev?.day || null, next: next?.day || null };
+}
+
+// One story, with its Spanish headline, summary and body filled in (and
+// cached) the first time anyone asks for it.
+async function getNoticia(env, id) {
+  const artId = parseInt(id);
+  if (!artId) return null;
+  const a = await env.DB.prepare('SELECT * FROM articles WHERE id = ?').bind(artId).first();
+  if (!a) return null;
+  if (!a.headline_es || !a.summary_es) {
+    try { await translateArticles([a], env); } catch (e) { console.log('translate story failed:', e.message); }
+  }
+  if (!a.body_es && a.body) {
+    try { await translateBody(a, env); } catch (e) { console.log('translate body failed:', e.message); }
+  }
+  return a;
+}
+
 // One row per day that has articles, newest first, each carrying its lead
 // headline (Spanish when cached) for the índice.
 async function getEditions(env) {
@@ -391,6 +451,40 @@ async function getEditions(env) {
 }
 
 // ─── SPANISH TRANSLATION (Gemini, cached in D1) ────────────────────────
+
+// The story body (markdown, written in English by the morning routine) into
+// Spanish, once, cached on the row as body_es. Mutates `a` in place.
+async function translateBody(a, env) {
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
+  const prompt =
+    'Traduce este texto de una nota de noticias de inmigración al español latinoamericano neutro, ' +
+    'para un periódico serio. Reglas: claro y directo, cifras, fechas, siglas y nombres propios intactos, ' +
+    'sin comillas tipográficas, sin guiones largos, sin anglicismos innecesarios. Conserva exactamente la ' +
+    'estructura markdown (encabezados con ##, viñetas con -, párrafos) y traduce también los encabezados. ' +
+    'Devuelve SOLO el markdown traducido, sin comentarios.\n\n' + a.body;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
+      {
+        method: 'POST',
+        headers: { 'x-goog-api-key': env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        signal: controller.signal
+      }
+    );
+    if (!res.ok) throw new Error(`Gemini ${res.status}`);
+    const j = await res.json();
+    const text = (j.candidates?.[0]?.content?.parts?.[0]?.text || '').trim().replace(/^```(?:markdown)?\s*|\s*```$/g, '').trim();
+    if (text.length < 40) throw new Error('empty translation');
+    await env.DB.prepare('UPDATE articles SET body_es = ? WHERE id = ?').bind(text, a.id).run();
+    a.body_es = text;
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function translateArticles(items, env) {
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
@@ -753,6 +847,9 @@ async function sendEditionToSubscribers(env, { force = false, to = null } = {}) 
 
   const missing = articles.filter(a => !a.headline_es || !a.summary_es).slice(0, 20);
   if (missing.length) { try { await translateArticles(missing, env); } catch (e) { console.log('translate before send failed:', e.message); } }
+  for (const a of articles) {
+    if (!a.body_es && a.body) { try { await translateBody(a, env); } catch (e) { console.log('translate body before send failed:', e.message); } }
+  }
 
   const featured = articles.slice(0, 5);
   const fecha = fechaLarga(day);

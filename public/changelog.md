@@ -1,5 +1,13 @@
 # Diario Migrante Changelog
 
+## August 25, 2026 — Cada noticia, su propia página
+
+- Every story now has a permanent address — **diariomigrante.com/noticia/1360/ice-reporta-1-328-arrestos…** — with the headline, the summary, the drawing, a button to the original article, and the full write-up in Spanish. Until today the 170 stories only existed inside their edition pages; now each one can be found, shared, and indexed on its own.
+- Tap any headline or drawing on the front page or an edition to open the story. Under it, the rest of that day's paper, and the way back to the full edition.
+- Every edition now links to the one before and after it, so no day is a dead end, and the sitemap lists all 170 stories alongside the 40 editions.
+- For AI agents: every story reads as clean text at **/noticia/:id.md**, the MCP tools return a permalink with each result, and `noticia_completa` now hands back the Spanish write-up instead of the English draft.
+- Plumbing: plain-http addresses redirect to https in one hop, and the text-only copies tell search engines to index the real page instead.
+
 ## August 25, 2026 — Cada noticia lleva a su fuente
 
 - Every story in the morning email is a link now. Tap the headline, or the "Leer en …" line under it, and you land on the original article — the paper's whole stance is analysis over real sources, and the email finally shows them.

@@ -5,7 +5,7 @@
 //
 //   claude mcp add --transport http diario https://diariomigrante.com/mcp
 
-import { edicionMarkdown, fechaLarga, ORIGIN } from './pages.js';
+import { edicionMarkdown, noticiaMarkdown, noticiaPath, fechaLarga, ORIGIN } from './pages.js';
 
 const PROTOCOL = '2025-06-18';
 const SUPPORTED = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -35,7 +35,7 @@ const TOOLS = [
   },
   {
     name: 'buscar_noticias',
-    description: 'Busca en todas las noticias del diario por palabra clave (titulares y resúmenes, en español e inglés). Devuelve las coincidencias más recientes primero, con el id de cada noticia.',
+    description: 'Busca en todas las noticias del diario por palabra clave (titulares y resúmenes, en español e inglés). Devuelve las coincidencias más recientes primero, con el id, la fuente y el permalink de cada noticia.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -47,7 +47,7 @@ const TOOLS = [
   },
   {
     name: 'noticia_completa',
-    description: 'Devuelve una noticia completa por su id, incluido el cuerpo del artículo. El titular y el resumen van en español; el cuerpo está en inglés.',
+    description: 'Devuelve una noticia completa por su id en markdown: titular, resumen, fuente original, permalink y el cuerpo entero en español.',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'number', description: 'El id de la noticia (lo dan buscar_noticias y la API)' } },
@@ -101,7 +101,7 @@ export async function handleMCP(request, env, deps) {
       protocolVersion: SUPPORTED.includes(params.protocolVersion) ? params.protocolVersion : PROTOCOL,
       capabilities: { tools: {} },
       serverInfo: { name: 'diario-migrante', title: 'Diario Migrante', version: '1.0.0' },
-      instructions: 'El diario de noticias de inmigración en español, escrito cada mañana. leer_edicion devuelve la portada de hoy (o de cualquier día) en markdown; buscar_noticias encuentra coberturas pasadas; noticia_completa da el cuerpo entero; suscribir apunta un correo a la edición diaria.'
+      instructions: 'El diario de noticias de inmigración en español, escrito cada mañana. leer_edicion devuelve la portada de hoy (o de cualquier día) en markdown con el permalink de cada noticia; buscar_noticias encuentra coberturas pasadas; noticia_completa da una noticia entera en español; suscribir apunta un correo a la edición diaria. Cada noticia vive en https://diariomigrante.com/noticia/:id/:slug (y en /noticia/:id.md).'
     });
   }
   if (method === 'ping') return rpcResult(id, {});
@@ -153,7 +153,7 @@ async function callTool(name, args, env, deps) {
     ).bind(like, limite).all();
     if (!results.length) return `Sin resultados para «${q}».`;
     const lineas = results.map(a =>
-      `- [id ${a.id} · ${a.day}] ${a.headline_es || a.headline}\n  ${a.summary_es || a.summary}\n  Fuente: ${a.source_name}${a.source_url ? ` — ${a.source_url}` : ''}`
+      `- [id ${a.id} · ${a.day}] ${a.headline_es || a.headline}\n  ${a.summary_es || a.summary}\n  Fuente: ${a.source_name}${a.source_url ? ` — ${a.source_url}` : ''}\n  Permalink: ${ORIGIN}${noticiaPath(a)}`
     );
     return `${results.length} resultado${results.length === 1 ? '' : 's'} para «${q}»:\n\n${lineas.join('\n\n')}`;
   }
@@ -161,19 +161,9 @@ async function callTool(name, args, env, deps) {
   if (name === 'noticia_completa') {
     const artId = parseInt(args.id);
     if (!artId) throw new ToolError('Falta el id de la noticia.');
-    const a = await env.DB.prepare('SELECT * FROM articles WHERE id = ?').bind(artId).first();
+    const a = await deps.getNoticia(env, artId);
     if (!a) throw new ToolError(`No existe la noticia ${artId}.`);
-    return [
-      `# ${a.headline_es || a.headline}`,
-      '',
-      a.summary_es || a.summary,
-      '',
-      `Edición: ${a.published_at?.slice(0, 10)} · Fuente: ${a.source_name}${a.source_url ? ` — ${a.source_url}` : ''}`,
-      '',
-      '## Cuerpo (en inglés)',
-      '',
-      a.body || '(sin cuerpo)'
-    ].join('\n');
+    return noticiaMarkdown(a);
   }
 
   if (name === 'suscribir') {

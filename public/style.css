@@ -412,3 +412,83 @@ a.folio-item:hover { text-decoration: underline; }
   .ed-tit { flex: 1 1 100%; font-size: 18px; }
   .fuente-inline { white-space: normal; padding-left: 4px; }
 }
+
+/* ─── La noticia (cada historia en su propia hoja) ── */
+
+.lead-tit a, .col-tit a { color: inherit; text-decoration: none; }
+.lead-tit a:hover, .col-tit a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.lead-figura a, .col-figura a { display: block; position: absolute; inset: 0; }
+.lead-figura a { inset: 0 0 0 32px; }
+.lead-figura a img { inset: 0; width: 100%; }
+
+.nota { display: flex; gap: 32px; padding: 30px 44px 34px; }
+.nota-texto { flex: 1; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.nota-tit { font-weight: 600; font-size: clamp(30px, 4.4vw, 45px); line-height: 1.14; letter-spacing: -0.01em; }
+.nota-resumen { font-size: 19px; line-height: 1.6; color: var(--tinta-suave); }
+
+.nota-fuente {
+  align-self: flex-start;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--tinta);
+  text-decoration: none;
+  border: 1px solid var(--tinta);
+  padding: 9px 14px;
+  margin-top: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.nota-fuente:hover { background: var(--tinta); color: var(--papel); }
+
+.nota-figura { width: 42.5%; flex-shrink: 0; border-left: 1px solid var(--regla); padding-left: 32px; }
+.nota-figura img { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; }
+
+.nota-cuerpo { padding: 28px 44px 36px; max-width: 760px; }
+.nota-cuerpo > .kicker { display: block; margin-bottom: 18px; }
+.nota-cuerpo p { font-size: 17.5px; line-height: 1.68; color: var(--tinta-suave); margin: 0 0 16px; }
+.nota-cuerpo p:has(+ .nota-nota) { margin-bottom: 0; }
+.nota-sub {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tinta);
+  margin: 26px 0 10px;
+}
+.nota-sub:first-of-type { margin-top: 0; }
+.nota-lista { margin: 0 0 16px 22px; }
+.nota-lista li { font-size: 17.5px; line-height: 1.6; color: var(--tinta-suave); margin-bottom: 8px; }
+.nota-nota { font-style: italic; font-size: 14px; color: var(--gris); border-top: 1px solid var(--regla-palida); padding-top: 14px; margin-top: 22px; }
+.nota-nota a { color: inherit; }
+
+.tambien { padding: 26px 44px 34px; }
+.tambien > .kicker { display: block; margin-bottom: 6px; }
+.tambien .ed-fila { padding: 12px 0; }
+.tambien .ed-fila-todo .ed-tit { font-family: var(--sans); font-weight: 600; font-size: 12px; letter-spacing: 0.12em; }
+.tambien .ed-fila-todo { border-bottom: none; }
+
+.nota-banda { justify-content: center; }
+
+/* Prev / next edition, in the colophon */
+.ed-nav { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 44px 0; }
+.ed-nav a {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--tinta);
+  text-decoration: none;
+}
+.ed-nav a:hover { text-decoration: underline; }
+
+@media (max-width: 760px) {
+  .lead-figura a, .col-figura a { position: static; display: block; }
+  .lead-figura a img, .col-figura a img { position: static; }
+  .nota { flex-direction: column; padding: 24px 20px 26px; gap: 20px; }
+  .nota-figura { width: 100%; border-left: none; padding-left: 0; border-top: 1px solid var(--regla); padding-top: 20px; }
+  .nota-cuerpo, .tambien { padding: 22px 20px 26px; }
+  .nota-cuerpo p, .nota-lista li { font-size: 17px; }
+  .ed-nav { padding: 16px 20px 0; flex-wrap: wrap; }
+}
