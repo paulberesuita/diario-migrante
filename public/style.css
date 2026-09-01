@@ -597,7 +597,7 @@ a.seccion:hover { color: var(--tinta); }
 .her-intro { font-size: 15.5px; line-height: 1.5; color: var(--gris); font-style: italic; }
 .her-fecha { padding-top: 6px; white-space: nowrap; }
 
-.her-cuerpo { max-width: 860px; }
+.her-cuerpo { max-width: none; }
 
 /* Tables: sans, hairlines, the first column carries the name. */
 .nota-tabla { overflow-x: auto; margin: 4px 0 22px; -webkit-overflow-scrolling: touch; }
@@ -611,13 +611,16 @@ a.seccion:hover { color: var(--tinta); }
   color: var(--tinta);
   padding: 0 14px 9px 0;
   border-bottom: 1px solid var(--tinta);
-  white-space: nowrap;
+  vertical-align: bottom;
 }
 .nota-tabla td { padding: 9px 14px 9px 0; border-bottom: 1px solid var(--regla-palida); color: var(--tinta-suave); vertical-align: top; }
 .nota-tabla td:first-child { font-weight: 600; color: var(--tinta); white-space: nowrap; }
+.nota-tabla td:nth-child(2) { min-width: 150px; }
 .nota-tabla th:last-child, .nota-tabla td:last-child { padding-right: 0; }
 
 @media (max-width: 760px) {
+  .secciones { gap: 0 5px; }
+  .seccion { font-size: 9.5px; letter-spacing: 0.09em; padding-left: 1px; padding-right: 1px; }
   .her-fila { flex-direction: column; gap: 6px; }
   .her-tit { font-size: 19px; }
   .her-fecha { padding-top: 0; }
