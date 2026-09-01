@@ -1,5 +1,13 @@
 # Diario Migrante Changelog
 
+## September 1, 2026 — Las herramientas
+
+- The paper has a reference desk now. **diariomigrante.com/herramientas** holds four pages in plain Spanish, each answering one question people search: how long USCIS is taking on each form, what this month's visa bulletin means for your category, what every common form costs (and how to pay less), and where the TPS stands country by country.
+- Every number on them was read from the official page the same day and says so: each page carries the date it was checked and a button to its source (USCIS, the State Department, the Federal Register). The pages are written for readers with little formal education; every term is explained once.
+- They stay current on their own: every Monday morning an agent re-reads each source and rewrites the page, so the bulletin turns over with the month and a fee change lands within the week.
+- The section line under the masthead now reads Portada · Ediciones · El calendario · Las herramientas · El registro on every page.
+- For agents: **/herramientas.md**, **/herramientas/:slug.md**, and **/api/herramientas** (JSON, with the markdown body).
+
 ## September 1, 2026 — El calendario
 
 - The paper has a calendar now. **diariomigrante.com/calendario** lists the dates that matter to immigrants — TPS end dates, rules taking effect, forms that change, comment deadlines, hearings — month by month, the close ones flagged "en 8 días", the past ones kept underneath. Every date came out of a story the paper ran, and each links to that story and to its source.
