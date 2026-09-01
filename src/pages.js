@@ -26,17 +26,33 @@ const CATEGORIAS = {
 };
 const categoriaEs = c => CATEGORIAS[c] || 'NOTICIAS';
 
-// The story bodies are markdown (## heads, bullets, paragraphs, **bold**).
-// Enough of a renderer for that, nothing more.
-function mdToHtml(md) {
+// The story bodies are markdown (## heads, bullets, paragraphs, **bold**);
+// the herramientas add simple pipe tables. Enough of a renderer for that,
+// nothing more.
+export function mdToHtml(md) {
   const inline = t => esc(t)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  const out = []; let para = []; let list = false;
+  const out = []; let para = []; let list = false; let table = null;
   const flush = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
   const closeList = () => { if (list) { out.push('</ul>'); list = false; } };
+  const cells = line => line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const closeTable = () => {
+    if (!table) return;
+    const [head, ...rows] = table;
+    out.push(`<div class="nota-tabla"><table><thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${head.map((_, i) => `<td>${inline(r[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+    table = null;
+  };
   for (const raw of String(md || '').split('\n')) {
     const line = raw.trim();
+    if (line.startsWith('|')) {
+      flush(); closeList();
+      if (/^\|?\s*:?-{2,}/.test(line.replace(/^\|/, ''))) continue; // the |---| separator row
+      if (!table) table = [];
+      table.push(cells(line));
+      continue;
+    }
+    closeTable();
     if (!line) { flush(); closeList(); continue; }
     const h = line.match(/^#{1,4}\s+(.*)$/);
     if (h) { flush(); closeList(); out.push(`<h2 class="nota-sub">${inline(h[1])}</h2>`); continue; }
@@ -44,7 +60,7 @@ function mdToHtml(md) {
     if (li) { flush(); if (!list) { out.push('<ul class="nota-lista">'); list = true; } out.push(`<li>${inline(li[1])}</li>`); continue; }
     closeList(); para.push(line);
   }
-  flush(); closeList();
+  flush(); closeList(); closeTable();
   return out.join('\n');
 }
 
@@ -198,7 +214,7 @@ function historiaHtml(a) {
         ${a.image_url ? `<figure class="col-figura"><a href="${noticiaPath(a)}"><img src="${esc(a.image_url)}" alt="${esc(a.headline_es || a.headline)}" loading="lazy"></a></figure>` : ''}`;
 }
 
-const SUSCRIBIR_COL = `<div class="col col-suscribir">
+export const SUSCRIBIR_COL = `<div class="col col-suscribir">
       <span class="kicker">SUSCRÍBETE</span>
       <div class="sus-tarifa">
         <div class="tarifa-fila"><span class="tarifa-rubro">Entrega</span><i class="tarifa-puntos"></i><span class="tarifa-dato">7:00 de la mañana</span></div>
@@ -218,6 +234,7 @@ const SECCIONES = [
   ['portada', '/', 'PORTADA'],
   ['ediciones', '/ediciones', 'EDICIONES'],
   ['calendario', '/calendario', 'EL CALENDARIO'],
+  ['herramientas', '/herramientas', 'LAS HERRAMIENTAS'],
   ['registro', '/registro', 'EL REGISTRO']
 ];
 export function seccionesHtml(actual) {
@@ -517,12 +534,14 @@ ${headHtml({
 
 // ─── Sitemap + 404 ─────────────────────────────────────────────────────
 
-export function sitemapXml(eds, arts = [], fechas = []) {
+export function sitemapXml(eds, arts = [], fechas = [], herramientas = []) {
   const hoy = eds[0]?.day;
   const urls = [
     `<url><loc>${ORIGIN}/</loc>${hoy ? `<lastmod>${hoy}</lastmod>` : ''}<changefreq>daily</changefreq><priority>1.0</priority></url>`,
     `<url><loc>${ORIGIN}/ediciones</loc>${hoy ? `<lastmod>${hoy}</lastmod>` : ''}<changefreq>daily</changefreq></url>`,
     `<url><loc>${ORIGIN}/calendario</loc>${hoy ? `<lastmod>${hoy}</lastmod>` : ''}<changefreq>daily</changefreq><priority>0.9</priority></url>`,
+    `<url><loc>${ORIGIN}/herramientas</loc>${hoy ? `<lastmod>${hoy}</lastmod>` : ''}<changefreq>weekly</changefreq><priority>0.9</priority></url>`,
+    ...herramientas.map(h => `<url><loc>${ORIGIN}/herramientas/${h.slug}</loc><lastmod>${(h.checked_at || h.updated_at || '').slice(0, 10)}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`),
     `<url><loc>${ORIGIN}/registro/</loc><changefreq>daily</changefreq></url>`,
     ...eds.map(e => `<url><loc>${ORIGIN}/edicion/${e.day}</loc><lastmod>${e.day}</lastmod></url>`),
     ...arts.map(a => `<url><loc>${ORIGIN}${noticiaPath(a)}</loc><lastmod>${a.day}</lastmod></url>`),
@@ -608,11 +627,17 @@ Servidor MCP (Streamable HTTP, sin autenticación) en \`${ORIGIN}/mcp\` — herr
 - \`GET ${ORIGIN}/api/fechas\` — JSON de las fechas (\`?desde=YYYY-MM-DD&hasta=YYYY-MM-DD\`); cada una trae \`day\`, \`title\`, \`detail\`, \`kind\`, \`country\`, \`source_url\` y el \`article_id\` de la noticia.
 - \`${ORIGIN}/calendario.ics\` — feed iCal para suscribirse desde cualquier calendario; \`/calendario/:id.ics\` para una sola fecha.
 
+## Las herramientas (referencia viva)
+
+- [Las herramientas](${ORIGIN}/herramientas) — cuatro páginas de referencia en español claro, revisadas cada semana contra la fuente oficial: tiempos de procesamiento de USCIS, el boletín de visas del mes, las tarifas de los formularios y el TPS país por país. Cada una en \`/herramientas/:slug\` (markdown en \`/herramientas/:slug.md\`; índice en \`${ORIGIN}/herramientas.md\`).
+- \`GET ${ORIGIN}/api/herramientas\` — la lista con \`slug\`, \`title\`, \`intro\`, \`source_url\`, \`checked_at\`; \`GET ${ORIGIN}/api/herramientas/:slug\` — una página completa con su \`body\` en markdown.
+
 ## Páginas (HTML)
 
 - [Portada](${ORIGIN}/) — la edición de hoy.
 - [Ediciones anteriores](${ORIGIN}/ediciones) — el índice completo; cada día vive en \`/edicion/YYYY-MM-DD\`.
 - [El calendario](${ORIGIN}/calendario) — las fechas que importan; cada una en \`/calendario/:id/:slug\`.
+- [Las herramientas](${ORIGIN}/herramientas) — las páginas de referencia; cada una en \`/herramientas/:slug\`.
 - [El registro](${ORIGIN}/registro) — todo lo que llegó hoy, con hora y fuente.
 - Cada noticia: \`${ORIGIN}/noticia/:id/:slug\` — su propia página, con datos estructurados NewsArticle.
 - [Sitemap](${ORIGIN}/sitemap.xml) — todas las ediciones y noticias.

@@ -587,3 +587,39 @@ a.seccion:hover { color: var(--tinta); }
   .cal-semana .ed-tit { font-size: 19px; }
   .col-calendario { flex: 0 0 auto; }
 }
+
+/* ─── Las herramientas ── */
+
+.her-fila { align-items: flex-start; padding: 16px 0; gap: 18px; }
+.her-texto { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.her-tit { font-size: 22px; font-weight: 600; line-height: 1.25; }
+.her-fila:hover .her-tit { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.her-intro { font-size: 15.5px; line-height: 1.5; color: var(--gris); font-style: italic; }
+.her-fecha { padding-top: 6px; white-space: nowrap; }
+
+.her-cuerpo { max-width: 860px; }
+
+/* Tables: sans, hairlines, the first column carries the name. */
+.nota-tabla { overflow-x: auto; margin: 4px 0 22px; -webkit-overflow-scrolling: touch; }
+.nota-tabla table { width: 100%; border-collapse: collapse; font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+.nota-tabla th {
+  text-align: left;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta);
+  padding: 0 14px 9px 0;
+  border-bottom: 1px solid var(--tinta);
+  white-space: nowrap;
+}
+.nota-tabla td { padding: 9px 14px 9px 0; border-bottom: 1px solid var(--regla-palida); color: var(--tinta-suave); vertical-align: top; }
+.nota-tabla td:first-child { font-weight: 600; color: var(--tinta); white-space: nowrap; }
+.nota-tabla th:last-child, .nota-tabla td:last-child { padding-right: 0; }
+
+@media (max-width: 760px) {
+  .her-fila { flex-direction: column; gap: 6px; }
+  .her-tit { font-size: 19px; }
+  .her-fecha { padding-top: 0; }
+  .nota-tabla table { font-size: 13px; min-width: 560px; }
+}

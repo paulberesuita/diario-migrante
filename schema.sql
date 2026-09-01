@@ -102,3 +102,18 @@ CREATE TABLE IF NOT EXISTS fechas (
   FOREIGN KEY (article_id) REFERENCES articles(id)
 );
 CREATE INDEX IF NOT EXISTS idx_fechas_day ON fechas(day);
+
+-- Las herramientas: living reference pages in Spanish (processing times,
+-- visa bulletin, fees, TPS by country). A weekly routine rewrites each one
+-- through POST /api/herramientas/:slug.
+CREATE TABLE IF NOT EXISTS herramientas (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  intro TEXT,
+  body TEXT NOT NULL,                      -- markdown (## heads, bullets, pipe tables)
+  source_name TEXT,
+  source_url TEXT,
+  checked_at TEXT,                         -- YYYY-MM-DD the source was last read
+  orden INTEGER NOT NULL DEFAULT 99,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

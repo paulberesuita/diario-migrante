@@ -1,6 +1,7 @@
 import { ORIGIN, esc, fechaLarga, portadaPage, edicionesPage, sitemapXml, notFoundPage, edicionMarkdown, llmsTxt, noticiaPage, noticiaMarkdown, noticiaPath } from './pages.js';
 import { handleMCP } from './mcp.js';
 import { getFechas, getFecha, insertFechas, getProximas, calendarioPage, fechaPage, calendarioIcs, calendarioMarkdown, fechasEmailHtml, fechaPath } from './fechas.js';
+import { getHerramientas, getHerramienta, upsertHerramienta, herramientasPage, herramientaPage, herramientaMarkdown, herramientasMarkdown, herramientaPath } from './herramientas.js';
 
 const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 
@@ -162,6 +163,29 @@ export default {
         return htmlResponse(fechaPage(f, { mismasMes }), 200, 1800);
       }
 
+      // ─── Las herramientas (src/herramientas.js) ─────────────────────
+
+      if (path === '/herramientas' || path === '/herramientas/') {
+        if (path.endsWith('/')) return Response.redirect(`${ORIGIN}/herramientas`, 301);
+        return htmlResponse(herramientasPage(await getHerramientas(env)), 200, 900);
+      }
+      if (path === '/herramientas.md') {
+        return mdResponse(herramientasMarkdown(await getHerramientas(env)), `${ORIGIN}/herramientas`);
+      }
+      const herrMd = path.match(/^\/herramientas\/([a-z0-9-]+)\.md$/);
+      if (herrMd) {
+        const h = await getHerramienta(env, herrMd[1]);
+        if (!h) return new Response('No existe esa herramienta.\n', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+        return mdResponse(herramientaMarkdown(h), `${ORIGIN}${herramientaPath(h)}`);
+      }
+      const herr = path.match(/^\/herramientas\/([a-z0-9-]+)(\/?)$/);
+      if (herr) {
+        if (herr[2]) return Response.redirect(`${ORIGIN}/herramientas/${herr[1]}`, 301);
+        const h = await getHerramienta(env, herr[1]);
+        if (!h) return htmlResponse(notFoundPage(), 404);
+        return htmlResponse(herramientaPage(h, { otras: await getHerramientas(env) }), 200, 1800);
+      }
+
       if (path === '/llms.txt') {
         return new Response(llmsTxt(await getEditions(env)), {
           headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
@@ -189,7 +213,7 @@ export default {
         const { results: fechas } = await env.DB.prepare(
           "SELECT id, title, updated_at FROM fechas WHERE status != 'cancelada' ORDER BY day DESC"
         ).all();
-        return new Response(sitemapXml(await getEditions(env), arts, fechas), {
+        return new Response(sitemapXml(await getEditions(env), arts, fechas, await getHerramientas(env)), {
           headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
         });
       }
@@ -328,6 +352,32 @@ async function handleAPI(path, request, env) {
     sets.push("updated_at = datetime('now')");
     const r = await env.DB.prepare(`UPDATE fechas SET ${sets.join(', ')} WHERE id = ?`).bind(...binds, fechaEdit[1]).run();
     return new Response(JSON.stringify({ success: true, changed: r.meta.changes }), { headers });
+  }
+
+  // GET /api/herramientas — the reference pages (no body); GET /api/herramientas/:slug — one with its markdown body
+  if (path === '/api/herramientas' && request.method === 'GET') {
+    const items = await getHerramientas(env);
+    return new Response(JSON.stringify(items.map(h => ({ ...h, url: `${ORIGIN}${herramientaPath(h)}`, md: `${ORIGIN}${herramientaPath(h)}.md` }))), { headers });
+  }
+  const herrApi = path.match(/^\/api\/herramientas\/([a-z0-9-]+)$/);
+  if (herrApi && request.method === 'GET') {
+    const h = await getHerramienta(env, herrApi[1]);
+    if (!h) return new Response('{"error":"Not found"}', { status: 404, headers });
+    return new Response(JSON.stringify({ ...h, url: `${ORIGIN}${herramientaPath(h)}` }), { headers });
+  }
+
+  // POST /api/herramientas/:slug — the weekly routine (or ops) rewrites a page:
+  // {title, intro, body (markdown), source_name, source_url, checked_at}
+  if (herrApi && request.method === 'POST') {
+    if (!checkAuth(request, env)) return new Response('{"error":"Unauthorized"}', { status: 401, headers });
+    try {
+      const body = await request.json();
+      const h = await upsertHerramienta(env, herrApi[1], body);
+      await postEvent(env, { title: `Herramienta actualizada — ${h.title}`, body: `revisada el ${h.checked_at}`, url: `${ORIGIN}${herramientaPath(h)}` });
+      return new Response(JSON.stringify({ success: true, slug: h.slug, title: h.title, checked_at: h.checked_at, url: `${ORIGIN}${herramientaPath(h)}` }), { headers });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 400, headers });
+    }
   }
 
   // GET /api/sources
