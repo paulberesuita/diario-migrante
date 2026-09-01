@@ -1,5 +1,15 @@
 # Diario Migrante Changelog
 
+## September 1, 2026 — El calendario
+
+- The paper has a calendar now. **diariomigrante.com/calendario** lists the dates that matter to immigrants — TPS end dates, rules taking effect, forms that change, comment deadlines, hearings — month by month, the close ones flagged "en 8 días", the past ones kept underneath. Every date came out of a story the paper ran, and each links to that story and to its source.
+- Each date has its own page (**/calendario/1/termina-el-tps-de-el-salvador…**): what happens that day, who it touches, what to do, and the story behind it.
+- Put it in your phone: **Añadir a mi calendario** subscribes your calendar app to the feed at **/calendario.ics**, so new dates show up on their own. Any single date can be added by itself.
+- When a date falls within the week, the morning email carries an "Esta semana vence" strip under the stories.
+- The morning agent keeps it current: a story that sets a concrete future date puts it on the calendar as it's written.
+- Every page now carries a section line under the masthead — Portada · Ediciones · El calendario · El registro.
+- For agents: **/calendario.md**, **/api/fechas** (JSON), and a new MCP tool, `proximas_fechas`.
+
 ## August 25, 2026 — Cada noticia, su propia página
 
 - Every story now has a permanent address — **diariomigrante.com/noticia/1360/ice-reporta-1-328-arrestos…** — with the headline, the summary, the drawing, a button to the original article, and the full write-up in Spanish. Until today the 170 stories only existed inside their edition pages; now each one can be found, shared, and indexed on its own.

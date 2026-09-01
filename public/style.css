@@ -492,3 +492,98 @@ a.folio-item:hover { text-decoration: underline; }
   .nota-cuerpo p, .nota-lista li { font-size: 17px; }
   .ed-nav { padding: 16px 20px 0; flex-wrap: wrap; }
 }
+
+/* ─── Secciones (la línea bajo la cabecera, ahora que el diario tiene secciones) ── */
+
+.secciones {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  padding: 9px 0 0;
+  border-bottom: 1px solid var(--regla);
+}
+.seccion {
+  display: inline-block;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--gris);
+  text-decoration: none;
+  padding: 4px 2px 9px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+a.seccion:hover { color: var(--tinta); }
+.seccion-actual { color: var(--tinta); border-bottom-color: var(--tinta); }
+.secciones i { font-style: normal; color: var(--regla); font-size: 10px; padding-bottom: 9px; }
+
+/* ─── El calendario ── */
+
+.cal-intro {
+  font-style: italic;
+  color: var(--gris);
+  font-size: 15.5px;
+  line-height: 1.55;
+  max-width: 640px;
+  padding-bottom: 22px;
+}
+
+.cal-semana { padding-bottom: 32px; }
+.cal-semana .ed-fila { padding: 14px 0; }
+.cal-semana .ed-tit { font-size: 22px; font-weight: 600; }
+.cal-semana .ed-nombre { color: var(--tinta); }
+
+.cal-mes {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--gris-claro);
+  margin-left: 1px;
+}
+
+.cal-pasadas { padding-top: 32px; }
+.cal-pasadas .ed-fila { opacity: 0.55; transition: opacity 0.15s; }
+.cal-pasadas .ed-fila:hover { opacity: 1; }
+
+.col-calendario { flex: 0 0 340px; }
+.col-calendario code { font-family: var(--sans); font-size: 12px; background: rgba(23, 21, 18, 0.06); padding: 1px 4px; }
+
+.cal-boton {
+  align-self: flex-start;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 10px 18px;
+  background: var(--tinta);
+  color: var(--papel);
+  text-decoration: none;
+  border-radius: 3px;
+}
+.cal-boton:hover { background: var(--tinta-suave); }
+
+.cal-fecha-grande {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  color: var(--tinta);
+}
+.cal-cuando { font-style: italic; color: var(--gris); font-size: 15.5px; }
+.cal-acciones { display: flex; flex-wrap: wrap; gap: 10px; }
+.cal-acciones .nota-fuente { margin-top: 0; }
+.cal-nota .nota-texto { max-width: 760px; }
+
+.cal-noticia-tit { font-weight: 600; font-size: 22px; line-height: 1.25; margin: 0 0 12px; }
+.cal-noticia-tit a { color: inherit; text-decoration: none; }
+.cal-noticia-tit a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+
+@media (max-width: 760px) {
+  .secciones { gap: 0 6px; }
+  .seccion { font-size: 10px; letter-spacing: 0.1em; }
+  .cal-semana .ed-tit { font-size: 19px; }
+  .col-calendario { flex: 0 0 auto; }
+}

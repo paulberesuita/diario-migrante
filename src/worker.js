@@ -1,5 +1,18 @@
 import { ORIGIN, esc, fechaLarga, portadaPage, edicionesPage, sitemapXml, notFoundPage, edicionMarkdown, llmsTxt, noticiaPage, noticiaMarkdown, noticiaPath } from './pages.js';
 import { handleMCP } from './mcp.js';
+import { getFechas, getFecha, insertFechas, getProximas, calendarioPage, fechaPage, calendarioIcs, calendarioMarkdown, fechasEmailHtml, fechaPath } from './fechas.js';
+
+const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+
+// iCalendar: text/calendar so phones offer "add to calendar"; the feed itself
+// is what webcal:// subscribes to.
+const icsResponse = (body, filename = 'diario-migrante-calendario.ics') => new Response(body, {
+  headers: {
+    'Content-Type': 'text/calendar; charset=utf-8',
+    'Content-Disposition': `inline; filename="${filename}"`,
+    'Cache-Control': 'public, max-age=1800'
+  }
+});
 
 const htmlResponse = (body, status = 200, maxAge = 300) => new Response(body, {
   status,
@@ -120,6 +133,35 @@ export default {
         return htmlResponse(noticiaPage(a, { others }), 200, 3600);
       }
 
+      // ─── El calendario (src/fechas.js) ──────────────────────────────
+
+      if (path === '/calendario' || path === '/calendario/') {
+        if (path.endsWith('/')) return Response.redirect(`${ORIGIN}/calendario`, 301);
+        return htmlResponse(calendarioPage(await getFechas(env, { desde: daysAgo(120) })), 200, 900);
+      }
+      if (path === '/calendario.md') {
+        return mdResponse(calendarioMarkdown(await getFechas(env, { desde: daysAgo(120) })), `${ORIGIN}/calendario`);
+      }
+      if (path === '/calendario.ics') {
+        return icsResponse(calendarioIcs(await getFechas(env, { desde: daysAgo(60) })));
+      }
+      const fechaIcs = path.match(/^\/calendario\/(\d+)(?:\/[^/]*)?\.ics$/);
+      if (fechaIcs) {
+        const f = await getFecha(env, fechaIcs[1]);
+        if (!f) return new Response('No existe esa fecha.\n', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+        return icsResponse(calendarioIcs([f], { nombre: f.title }), `diario-migrante-${f.id}.ics`);
+      }
+      const fecha = path.match(/^\/calendario\/(\d+)(?:\/([^/]*))?\/?$/);
+      if (fecha) {
+        const f = await getFecha(env, fecha[1]);
+        if (!f) return htmlResponse(notFoundPage(), 404);
+        const canon = fechaPath(f);
+        if (path !== canon) return Response.redirect(`${ORIGIN}${canon}`, 301);
+        const mes = f.day.slice(0, 7);
+        const mismasMes = await getFechas(env, { desde: `${mes}-01`, hasta: `${mes}-31` });
+        return htmlResponse(fechaPage(f, { mismasMes }), 200, 1800);
+      }
+
       if (path === '/llms.txt') {
         return new Response(llmsTxt(await getEditions(env)), {
           headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
@@ -144,7 +186,10 @@ export default {
         const { results: arts } = await env.DB.prepare(
           'SELECT id, headline, headline_es, date(published_at) AS day FROM articles ORDER BY published_at DESC'
         ).all();
-        return new Response(sitemapXml(await getEditions(env), arts), {
+        const { results: fechas } = await env.DB.prepare(
+          "SELECT id, title, updated_at FROM fechas WHERE status != 'cancelada' ORDER BY day DESC"
+        ).all();
+        return new Response(sitemapXml(await getEditions(env), arts, fechas), {
           headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
         });
       }
@@ -240,6 +285,49 @@ async function handleAPI(path, request, env) {
     const article = await env.DB.prepare('SELECT * FROM articles WHERE id = ?').bind(id).first();
     if (!article) return new Response('{"error":"Not found"}', { status: 404, headers });
     return new Response(JSON.stringify(article), { headers });
+  }
+
+  // GET /api/fechas — the calendar as JSON (?desde=&hasta=, defaults: last 30 days onward)
+  if (path === '/api/fechas' && request.method === 'GET') {
+    const u = new URL(request.url);
+    const ok = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : null;
+    const desde = ok(u.searchParams.get('desde')) || daysAgo(30);
+    const hasta = ok(u.searchParams.get('hasta'));
+    const rows = await getFechas(env, { desde, hasta });
+    return new Response(JSON.stringify(rows.map(f => ({
+      id: f.id, day: f.day, title: f.title, detail: f.detail, kind: f.kind, country: f.country, status: f.status,
+      article_id: f.article_id, source_name: f.source_name, source_url: f.source_url,
+      url: `${ORIGIN}${fechaPath(f)}`, ics: `${ORIGIN}/calendario/${f.id}.ics`
+    }))), { headers });
+  }
+
+  // POST /api/fechas — add dates {fechas:[{day,title,detail,kind,country,article_id,source_name,source_url}]}
+  if (path === '/api/fechas' && request.method === 'POST') {
+    if (!checkAuth(request, env)) return new Response('{"error":"Unauthorized"}', { status: 401, headers });
+    try {
+      const body = await request.json();
+      const items = Array.isArray(body.fechas) ? body.fechas : [];
+      const r = await insertFechas(items, env);
+      return new Response(JSON.stringify({ success: true, received: items.length, ...r }), { headers });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+    }
+  }
+
+  // POST /api/fechas/:id — correct a date (any of day, title, detail, kind, country, status)
+  const fechaEdit = path.match(/^\/api\/fechas\/(\d+)$/);
+  if (fechaEdit && request.method === 'POST') {
+    if (!checkAuth(request, env)) return new Response('{"error":"Unauthorized"}', { status: 401, headers });
+    const body = await request.json().catch(() => ({}));
+    const sets = [];
+    const binds = [];
+    for (const k of ['day', 'title', 'detail', 'kind', 'country', 'status', 'source_name', 'source_url', 'article_id']) {
+      if (body[k] !== undefined) { sets.push(`${k} = ?`); binds.push(body[k]); }
+    }
+    if (!sets.length) return new Response('{"error":"nothing to update"}', { status: 400, headers });
+    sets.push("updated_at = datetime('now')");
+    const r = await env.DB.prepare(`UPDATE fechas SET ${sets.join(', ')} WHERE id = ?`).bind(...binds, fechaEdit[1]).run();
+    return new Response(JSON.stringify({ success: true, changed: r.meta.changes }), { headers });
   }
 
   // GET /api/sources
@@ -619,6 +707,7 @@ async function findOrCreateSource(item, env) {
 async function ingestArticles(items, env) {
   let inserted = 0;
   let skipped = 0;
+  let fechas = 0;
   const errors = [];
   // Art budget: five drawings per edition (Paul, 2026-08-12). The first five
   // stories get one each; on bigger days the rest run text-only.
@@ -655,18 +744,28 @@ async function ingestArticles(items, env) {
         'INSERT INTO raw_articles (source_id, title, url, raw_content, published_at, processed) VALUES (?, ?, ?, ?, ?, 1) RETURNING id'
       ).bind(sourceId, item.headline, item.source_url, item.summary, item.published_at || null).first();
 
-      await env.DB.prepare(
+      const art = await env.DB.prepare(
         `INSERT INTO articles (raw_article_id, source_id, headline, summary, body, category, source_name, source_url, image_url, published_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
-      ).bind(raw.id, sourceId, item.headline, item.summary, item.body, item.category || 'general', item.source_name || 'Unknown', item.source_url, imageUrl, item.published_at || null).run();
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now'))) RETURNING id`
+      ).bind(raw.id, sourceId, item.headline, item.summary, item.body, item.category || 'general', item.source_name || 'Unknown', item.source_url, imageUrl, item.published_at || null).first();
 
       inserted++;
+
+      // The story's dates go on the calendar, linked back to the story.
+      if (Array.isArray(item.fechas) && item.fechas.length) {
+        try {
+          const r = await insertFechas(item.fechas, env, { article: { id: art.id, source_name: item.source_name || null, source_url: item.source_url } });
+          fechas += r.inserted;
+        } catch (e) {
+          console.error('fechas insert failed:', e.message);
+        }
+      }
     } catch (e) {
       errors.push({ source_url: item.source_url || null, error: e.message });
     }
   }
 
-  return { success: true, received: items.length, inserted, skipped, errors };
+  return { success: true, received: items.length, inserted, skipped, fechas, errors };
 }
 
 // ─── EMAIL SUBSCRIPTION (Resend) ───────────────────────────────────────
@@ -691,7 +790,7 @@ async function unsubToken(email, secret) {
 // The email IS the paper: no card, white sheet edge to edge, the same folio
 // rules, blackletter masthead (PNG — email clients can't load the font), and
 // hairline-divided stories like the portada.
-function editionEmailHtml({ fecha, featured, unsubUrl }) {
+function editionEmailHtml({ fecha, featured, unsubUrl, fechasHtml = '' }) {
   const SERIF = "'Newsreader', Georgia, 'Times New Roman', serif";
   const SANS = "'Libre Franklin', -apple-system, Helvetica, Arial, sans-serif";
 
@@ -764,6 +863,9 @@ function editionEmailHtml({ fecha, featured, unsubUrl }) {
   <tr><td style="padding-top:26px;">
 ${storiesHtml}
   </td></tr>
+${fechasHtml ? `
+  <tr><td>${fechasHtml}
+  </td></tr>` : ''}
 
   <tr><td class="hair" style="border-top:1px solid #C9C6C0;padding-top:16px;" align="center">
     <p class="dim" style="margin:0;font-family:${SANS};font-size:10px;letter-spacing:1.5px;color:#8A857D;">DIARIO MIGRANTE &middot; GRATIS, CADA MA&Ntilde;ANA A LAS 7</p>
@@ -868,6 +970,10 @@ async function sendEditionToSubscribers(env, { force = false, to = null } = {}) 
     : (await env.DB.prepare('SELECT email FROM subscribers WHERE active = 1').all()).results;
   if (!subs.length) return { sent: 0, reason: 'no subscribers' };
 
+  // "Esta semana vence": the calendar's next seven days ride under the stories.
+  let fechasHtml = '';
+  try { fechasHtml = fechasEmailHtml(await getProximas(env, 7)); } catch (e) { console.log('fechas strip failed:', e.message); }
+
   const from = env.EMAIL_FROM || FALLBACK_FROM;
   const emails = [];
   for (const s of subs) {
@@ -878,7 +984,7 @@ async function sendEditionToSubscribers(env, { force = false, to = null } = {}) 
       to: [s.email],
       reply_to: REPLY_TO,
       subject,
-      html: editionEmailHtml({ fecha, featured, unsubUrl }),
+      html: editionEmailHtml({ fecha, featured, unsubUrl, fechasHtml }),
       headers: {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',

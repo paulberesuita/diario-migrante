@@ -49,10 +49,10 @@ function mdToHtml(md) {
 }
 
 // Manual date words — deterministic, no ICU surprises.
-const DIAS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
-const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+export const DIAS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+export const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 
-function partes(day) {
+export function partes(day) {
   const [y, m, d] = day.split('-').map(Number);
   return { y, m, d, dow: new Date(Date.UTC(y, m - 1, d)).getUTCDay() };
 }
@@ -64,7 +64,7 @@ export function fechaLarga(day) {
 }
 
 // "sábado 16 de agosto de 2026" — for titles and descriptions.
-function fechaMin(day) {
+export function fechaMin(day) {
   const p = partes(day);
   return `${DIAS[p.dow].toLowerCase()} ${p.d} de ${MESES[p.m - 1].toLowerCase()} de ${p.y}`;
 }
@@ -79,7 +79,7 @@ function formatHora(ts) {
 
 const FAVICON = "data:image/png;base64,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";
 
-function headHtml({ title, description, canonical, ogType = 'website', ogImage = `${ORIGIN}/portada.jpg`, jsonLd = [], alternateMd = null, published = null }) {
+export function headHtml({ title, description, canonical, ogType = 'website', ogImage = `${ORIGIN}/portada.jpg`, jsonLd = [], alternateMd = null, published = null }) {
   const ldTags = jsonLd
     .map(o => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, '\\u003c')}</script>`)
     .join('\n  ');
@@ -212,6 +212,20 @@ const SUSCRIBIR_COL = `<div class="col col-suscribir">
       <p class="sus-note" id="sus-note"></p>
     </div>`;
 
+// The paper has sections now: one line under the double rule names them,
+// the current one underlined, on every sheet.
+const SECCIONES = [
+  ['portada', '/', 'PORTADA'],
+  ['ediciones', '/ediciones', 'EDICIONES'],
+  ['calendario', '/calendario', 'EL CALENDARIO'],
+  ['registro', '/registro', 'EL REGISTRO']
+];
+export function seccionesHtml(actual) {
+  return `<nav class="secciones" aria-label="Secciones">${SECCIONES.map(([k, href, label]) =>
+    k === actual ? `<span class="seccion seccion-actual">${label}</span>` : `<a class="seccion" href="${href}">${label}</a>`
+  ).join('<i>·</i>')}</nav>`;
+}
+
 function cabeceraHtml({ home, day }) {
   const fecha = day
     ? `<a class="folio-item folio-fecha" href="${home ? '/registro' : `/registro?date=${day}`}">${fechaLarga(day)}</a>`
@@ -224,6 +238,7 @@ function cabeceraHtml({ home, day }) {
         </div>
         <h1 class="masthead">${home ? 'Diario Migrante' : '<a href="/">Diario Migrante</a>'}</h1>
         <div class="regla-doble"><i></i><i></i></div>
+        ${seccionesHtml(home ? 'portada' : 'ediciones')}
       </header>`;
 }
 
@@ -366,6 +381,7 @@ ${headHtml({ title, description: resumen, canonical: url, ogType: 'article', ogI
         </div>
         <div class="masthead"><a href="/">Diario Migrante</a></div>
         <div class="regla-doble"><i></i><i></i></div>
+        ${seccionesHtml('ediciones')}
       </header>
 
       <section class="nota">
@@ -476,6 +492,7 @@ ${headHtml({
         </div>
         <h1 class="masthead"><a href="/">Diario Migrante</a></h1>
         <div class="regla-doble"><i></i><i></i></div>
+        ${seccionesHtml('ediciones')}
       </header>
 
       <section class="ediciones">
@@ -500,14 +517,16 @@ ${headHtml({
 
 // ─── Sitemap + 404 ─────────────────────────────────────────────────────
 
-export function sitemapXml(eds, arts = []) {
+export function sitemapXml(eds, arts = [], fechas = []) {
   const hoy = eds[0]?.day;
   const urls = [
     `<url><loc>${ORIGIN}/</loc>${hoy ? `<lastmod>${hoy}</lastmod>` : ''}<changefreq>daily</changefreq><priority>1.0</priority></url>`,
     `<url><loc>${ORIGIN}/ediciones</loc>${hoy ? `<lastmod>${hoy}</lastmod>` : ''}<changefreq>daily</changefreq></url>`,
-    `<url><loc>${ORIGIN}/registro</loc><changefreq>daily</changefreq></url>`,
+    `<url><loc>${ORIGIN}/calendario</loc>${hoy ? `<lastmod>${hoy}</lastmod>` : ''}<changefreq>daily</changefreq><priority>0.9</priority></url>`,
+    `<url><loc>${ORIGIN}/registro/</loc><changefreq>daily</changefreq></url>`,
     ...eds.map(e => `<url><loc>${ORIGIN}/edicion/${e.day}</loc><lastmod>${e.day}</lastmod></url>`),
-    ...arts.map(a => `<url><loc>${ORIGIN}${noticiaPath(a)}</loc><lastmod>${a.day}</lastmod></url>`)
+    ...arts.map(a => `<url><loc>${ORIGIN}${noticiaPath(a)}</loc><lastmod>${a.day}</lastmod></url>`),
+    ...fechas.map(f => `<url><loc>${ORIGIN}/calendario/${f.id}/${slugify(f.title)}</loc>${f.updated_at ? `<lastmod>${f.updated_at.slice(0, 10)}</lastmod>` : ''}</url>`)
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -578,15 +597,22 @@ ${recientes}
 
 ## MCP
 
-Servidor MCP (Streamable HTTP, sin autenticación) en \`${ORIGIN}/mcp\` — herramientas: \`leer_edicion\`, \`listar_ediciones\`, \`buscar_noticias\`, \`noticia_completa\`, \`suscribir\`.
+Servidor MCP (Streamable HTTP, sin autenticación) en \`${ORIGIN}/mcp\` — herramientas: \`leer_edicion\`, \`listar_ediciones\`, \`buscar_noticias\`, \`noticia_completa\`, \`proximas_fechas\`, \`suscribir\`.
 
 - Claude Code: \`claude mcp add --transport http diario https://diariomigrante.com/mcp\`
 - claude.ai: Settings → Connectors → Add custom connector → \`https://diariomigrante.com/mcp\`
+
+## El calendario (las fechas que importan)
+
+- [El calendario](${ORIGIN}/calendario) — vencimientos del TPS, reglas que entran en vigor, formularios que cambian, plazos y audiencias; cada fecha sale de una noticia del diario y enlaza a su fuente. En markdown: \`${ORIGIN}/calendario.md\`.
+- \`GET ${ORIGIN}/api/fechas\` — JSON de las fechas (\`?desde=YYYY-MM-DD&hasta=YYYY-MM-DD\`); cada una trae \`day\`, \`title\`, \`detail\`, \`kind\`, \`country\`, \`source_url\` y el \`article_id\` de la noticia.
+- \`${ORIGIN}/calendario.ics\` — feed iCal para suscribirse desde cualquier calendario; \`/calendario/:id.ics\` para una sola fecha.
 
 ## Páginas (HTML)
 
 - [Portada](${ORIGIN}/) — la edición de hoy.
 - [Ediciones anteriores](${ORIGIN}/ediciones) — el índice completo; cada día vive en \`/edicion/YYYY-MM-DD\`.
+- [El calendario](${ORIGIN}/calendario) — las fechas que importan; cada una en \`/calendario/:id/:slug\`.
 - [El registro](${ORIGIN}/registro) — todo lo que llegó hoy, con hora y fuente.
 - Cada noticia: \`${ORIGIN}/noticia/:id/:slug\` — su propia página, con datos estructurados NewsArticle.
 - [Sitemap](${ORIGIN}/sitemap.xml) — todas las ediciones y noticias.

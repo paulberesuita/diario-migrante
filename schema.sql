@@ -82,3 +82,23 @@ INSERT OR IGNORE INTO sources (name, url, scrape_url, type, category) VALUES
   ('AILA News', 'https://www.aila.org', 'https://www.aila.org/immigration-news', 'html', 'policy'),
   ('Immigration Impact', 'https://immigrationimpact.com', 'https://immigrationimpact.com', 'html', 'general'),
   ('Boundless News', 'https://www.boundless.com', 'https://www.boundless.com/blog/boundless-weekly-immigration-news/', 'html', 'general');
+
+-- El calendario: the dates that matter (TPS end dates, rules taking effect,
+-- forms that change, comment deadlines, hearings), each tied to the story
+-- that set it. Written in Spanish directly — no translation pass.
+CREATE TABLE IF NOT EXISTS fechas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  day TEXT NOT NULL,                       -- YYYY-MM-DD
+  title TEXT NOT NULL,                     -- what happens that day, ≤ 10 words
+  detail TEXT,                             -- who it touches, what to do
+  kind TEXT NOT NULL DEFAULT 'otro',       -- tps · regla · tarifas · corte · formulario · visas · plazo · beneficios · otro
+  country TEXT,
+  article_id INTEGER,                      -- the story that set it
+  source_name TEXT,
+  source_url TEXT,
+  status TEXT NOT NULL DEFAULT 'vigente',  -- vigente · aplazada · cancelada
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (article_id) REFERENCES articles(id)
+);
+CREATE INDEX IF NOT EXISTS idx_fechas_day ON fechas(day);

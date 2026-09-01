@@ -6,6 +6,7 @@
 //   claude mcp add --transport http diario https://diariomigrante.com/mcp
 
 import { edicionMarkdown, noticiaMarkdown, noticiaPath, fechaLarga, ORIGIN } from './pages.js';
+import { getFechas, fechaPath, TIPOS } from './fechas.js';
 
 const PROTOCOL = '2025-06-18';
 const SUPPORTED = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -55,6 +56,17 @@ const TOOLS = [
     }
   },
   {
+    name: 'proximas_fechas',
+    description: 'El calendario del diario: las fechas que importan a los inmigrantes en EE. UU. (vencimientos del TPS, reglas que entran en vigor, formularios que cambian, plazos, audiencias), cada una con su fuente y la noticia que la registró. Devuelve las próximas fechas a partir de hoy.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dias: { type: 'number', description: 'Cuántos días hacia adelante mirar (1-365, default 60)' },
+        pasadas: { type: 'boolean', description: 'Incluir también las fechas de los últimos 30 días' }
+      }
+    }
+  },
+  {
     name: 'suscribir',
     description: 'Suscribe un correo a la edición diaria por email (gratis, cada mañana a las 7, hora del este de EE. UU.). Confirma con la persona antes de suscribirla.',
     inputSchema: {
@@ -101,7 +113,7 @@ export async function handleMCP(request, env, deps) {
       protocolVersion: SUPPORTED.includes(params.protocolVersion) ? params.protocolVersion : PROTOCOL,
       capabilities: { tools: {} },
       serverInfo: { name: 'diario-migrante', title: 'Diario Migrante', version: '1.0.0' },
-      instructions: 'El diario de noticias de inmigración en español, escrito cada mañana. leer_edicion devuelve la portada de hoy (o de cualquier día) en markdown con el permalink de cada noticia; buscar_noticias encuentra coberturas pasadas; noticia_completa da una noticia entera en español; suscribir apunta un correo a la edición diaria. Cada noticia vive en https://diariomigrante.com/noticia/:id/:slug (y en /noticia/:id.md).'
+      instructions: 'El diario de noticias de inmigración en español, escrito cada mañana. leer_edicion devuelve la portada de hoy (o de cualquier día) en markdown con el permalink de cada noticia; buscar_noticias encuentra coberturas pasadas; noticia_completa da una noticia entera en español; proximas_fechas da el calendario de fechas que importan (TPS, reglas, formularios, plazos) con sus fuentes; suscribir apunta un correo a la edición diaria. Cada noticia vive en https://diariomigrante.com/noticia/:id/:slug (y en /noticia/:id.md); el calendario en https://diariomigrante.com/calendario.'
     });
   }
   if (method === 'ping') return rpcResult(id, {});
@@ -164,6 +176,21 @@ async function callTool(name, args, env, deps) {
     const a = await deps.getNoticia(env, artId);
     if (!a) throw new ToolError(`No existe la noticia ${artId}.`);
     return noticiaMarkdown(a);
+  }
+
+  if (name === 'proximas_fechas') {
+    const dias = Math.min(Math.max(parseInt(args.dias) || 60, 1), 365);
+    const hoy = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
+    const desde = args.pasadas ? new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10) : hoy;
+    const hasta = new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10);
+    const fechas = await getFechas(env, { desde, hasta });
+    if (!fechas.length) return `No hay fechas registradas entre ${desde} y ${hasta}. El calendario: ${ORIGIN}/calendario`;
+    const lineas = fechas.map(f =>
+      `- ${f.day} (${fechaLarga(f.day).toLowerCase()})${f.day < hoy ? ' · ya pasó' : ''} — ${f.title}${f.country && !f.title.toLowerCase().includes(f.country.toLowerCase()) ? ` (${f.country})` : ''} · ${(TIPOS[f.kind] || 'fecha').toLowerCase()}` +
+      (f.detail ? `\n  ${f.detail}` : '') +
+      `\n  Página: ${ORIGIN}${fechaPath(f)}${f.source_url ? ` · Fuente: ${f.source_url}` : ''}${f.article_id ? ` · Noticia: ${ORIGIN}/noticia/${f.article_id}` : ''}`
+    );
+    return `Hoy es ${hoy}. ${fechas.length} fecha${fechas.length === 1 ? '' : 's'} entre ${desde} y ${hasta}:\n\n${lineas.join('\n\n')}\n\nEl calendario completo: ${ORIGIN}/calendario · feed iCal: ${ORIGIN}/calendario.ics`;
   }
 
   if (name === 'suscribir') {
