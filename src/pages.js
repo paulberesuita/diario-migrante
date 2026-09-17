@@ -276,7 +276,7 @@ function pliegoHtml(stories) {
           <p class="lead-resumen">${esc(l.summary_es || l.summary)}</p>
           ${fuenteHtml(l)}
         </div>
-        ${l.image_url ? `<figure class="lead-figura"><a href="${noticiaPath(l)}"><img src="${esc(l.image_url)}" alt="${esc(l.headline_es || l.headline)}" loading="eager"></a></figure>` : ''}
+        ${l.image_url ? `<figure class="lead-figura"><a href="${noticiaPath(l)}"><img src="${esc(l.image_url)}" alt="${esc(altDibujo(l))}" loading="eager"></a></figure>` : ''}
       </section>`;
 
   if (s.length > 1) {
