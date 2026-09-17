@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS articles (
   source_name TEXT NOT NULL,
   source_url TEXT NOT NULL,
   image_url TEXT,
+  image_concept TEXT,
   body_es TEXT,
   published_at TEXT NOT NULL DEFAULT (datetime('now')),
   featured INTEGER NOT NULL DEFAULT 0,

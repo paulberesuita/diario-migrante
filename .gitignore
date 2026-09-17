@@ -2,3 +2,6 @@ node_modules/
 .wrangler/
 .dev.vars
 backups/
+scripts/out/
+scripts/art-bakeoff.html
+scripts/art-styles.html

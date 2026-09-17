@@ -1,5 +1,12 @@
 # Diario Migrante Changelog
 
+## September 17, 2026 — Dibujos nuevos
+
+- The drawings are back, and they look different. Every story now gets a clear-line illustration, the look of a classic comic album: realistic drawing, clean black outlines, flat bright color, no shading. People have real proportions and real faces, and the backgrounds went from muted to vivid: cobalt, orange, yellow, emerald, coral.
+- A new illustrator draws them, OpenAI's GPT Image 2.5, with the old one standing by for the days it's out.
+- Nine editions, September 9 through 17, ran without drawings while the old illustrator was down. All 45 of those stories have theirs now.
+- Each drawing starts from a one-line scene built from objects (a gavel propping a cell door open, a station clock with no hands), never a literal picture of the news. Nothing graphic, ever.
+
 ## September 8, 2026 — Escrito en español
 
 - Starting with tomorrow's edition, every story is written in Spanish from the first word. Until today the morning agent wrote in English and a translator turned it into Spanish at publish time, and the seams showed: "Sept. 6" for a date, "U.S." for the country, an agency's name left in English halfway down a paragraph.

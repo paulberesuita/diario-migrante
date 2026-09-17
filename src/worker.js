@@ -424,7 +424,9 @@ async function handleAPI(path, request, env) {
     }
   }
 
-  // POST /api/backfill-images — generate art for articles missing it (?force=1 regenerates all)
+  // POST /api/backfill-images — generate art for articles missing it (?force=1 regenerates all).
+  // Optional JSON body { concepts: { "<article id>": "one-line scene" } } art-directs each
+  // story; otherwise the saved image_concept is used, and failing that the headline.
   if (path === '/api/backfill-images' && request.method === 'POST') {
     if (!checkAuth(request, env)) {
       return new Response('{"error":"Unauthorized"}', { status: 401, headers });
@@ -437,18 +439,21 @@ async function handleAPI(path, request, env) {
     const binds = [];
     if (!force) clauses.push('image_url IS NULL');
     if (date) { clauses.push('date(published_at) = ?'); binds.push(date); }
-    let q = 'SELECT id, headline, image_url FROM articles';
+    let q = 'SELECT id, headline, image_url, image_concept FROM articles';
     if (clauses.length) q += ' WHERE ' + clauses.join(' AND ');
+    q += ' ORDER BY published_at, id';
+    const concepts = (await request.json().catch(() => null))?.concepts || {};
 
     const { results } = await env.DB.prepare(q).bind(...binds).all();
     let generated = 0;
     const errors = [];
     for (const row of results) {
       try {
-        const url = await generateArticleImage(row.headline, env, null, {
+        const concept = (typeof concepts[row.id] === 'string' && concepts[row.id].trim()) || row.image_concept || null;
+        const url = await generateArticleImage(row.headline, env, concept, {
           field: ART_FIELDS[generated % ART_FIELDS.length]
         });
-        await env.DB.prepare('UPDATE articles SET image_url = ? WHERE id = ?').bind(url, row.id).run();
+        await env.DB.prepare('UPDATE articles SET image_url = ?, image_concept = ? WHERE id = ?').bind(url, concept, row.id).run();
         if (row.image_url?.startsWith('/img/')) {
           await env.BUCKET.delete(row.image_url.slice(1));
         }
@@ -457,7 +462,7 @@ async function handleAPI(path, request, env) {
         errors.push({ id: row.id, error: e.message });
       }
     }
-    return new Response(JSON.stringify({ success: true, pipeline: 'cartoon-editorial', targeted: results.length, generated, errors }), { headers });
+    return new Response(JSON.stringify({ success: true, pipeline: 'clear-line', targeted: results.length, generated, errors }), { headers });
   }
 
   // POST /api/subscribe
@@ -686,7 +691,7 @@ async function translateArticles(items, env) {
   }
 }
 
-// ─── ARTICLE ART (Nano Banana 2, stored in R2) ─────────────────────────
+// ─── ARTICLE ART (GPT Image 2.5 Flare, Gemini fallback, R2) ────────────
 
 function base64ToBytes(b64) {
   const bin = atob(b64);
@@ -697,59 +702,90 @@ function base64ToBytes(b64) {
 
 // One flat background field per image, rotated story to story so the portada
 // never comes out monochrome.
-const ART_FIELDS = ['saturated blue', 'saturated orange', 'saturated yellow', 'saturated green', 'dusty rose'];
+const ART_FIELDS = ['vivid cobalt blue', 'bright orange', 'sunny yellow', 'bright emerald green', 'hot coral pink'];
 
-async function generateArticleImage(headline, env, providedScene = null, opts = {}) {
-  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
-  const model = opts.model || 'gemini-3.1-flash-image';
-  const aspect = opts.aspect || '1:1';
-  const field = opts.field || ART_FIELDS[Math.floor(Math.random() * ART_FIELDS.length)];
-
-  // The routine art-directs each story (image_concept). Without one (backfills,
-  // manual ingests), the model invents the scene itself.
+// House look since 2026-09-17: clear line. Realistic drawing, flat vivid color,
+// no shading. Picked by Paul from scripts/art-styles.html.
+function artPrompt(headline, providedScene, field) {
+  // The routine art-directs each story (image_concept). Without one (manual
+  // ingests), the model invents the scene itself, held to objects so it
+  // doesn't illustrate the headline literally.
   const scene = providedScene?.trim().replace(/^["']|["']$/g, '')
-    || `a single symbolic deadpan scene of your own invention that captures the story behind this news headline: "${headline}"`;
+    || `A single symbolic, quiet scene of your own invention, built from a few physical objects, that captures the story behind this news headline: "${headline}"`;
 
-  const prompt = `Flat cartoon illustration with clean vector lines, thick black outlines, flat bold colors, ` +
-    `deadpan absurd character design. Faces are extremely simplified: tiny dot eyes, small flat expressionless mouth, ` +
-    `no eyebrows, no nose or a single short line for a nose, smooth rounded heads. Characters are a natural mix of ` +
-    `people, some light-skinned, some tan, some dark-skinned, with varied hair. Editorial illustration style like ` +
-    `Jean Jullien and Andy Rementer, one flat ${field} background color, no gradients, no shading: ${scene}. ` +
+  return `Ligne claire illustration in the tradition of classic Franco-Belgian comic albums: uniform clean black outlines, ` +
+    `realistic proportions, carefully observed objects and settings, flat vivid colors with no shading and no gradients. ` +
+    `Faces are simple but human, with deadpan expressions. ` +
+    `People are a natural mix, some light-skinned, some tan, some dark-skinned, with varied hair. ` +
+    `Vivid, punchy, fully saturated colors throughout: bright clothing, bright objects, clean whites. ` +
+    `No dusty, grayish, muddy or washed-out tones. One flat ${field} background color. ` +
+    `The scene: ${scene} ` +
+    `Nothing graphic: no blood, no injuries, no bodies on the ground, no weapons aimed at anyone. ` +
     `The artwork fills the entire image edge to edge, no paper border, no frame, no mat, not a photo of a poster. ` +
-    `Not corporate flat vector, not clip art, not a children's book style. ` +
     `Absolutely no logos, no text, no letters, no numbers anywhere.`;
+}
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 55000);
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'x-goog-api-key': env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { imageConfig: { aspectRatio: aspect } }
-        }),
-        signal: controller.signal
-      }
-    );
-    if (!res.ok) throw new Error(`Nano Banana ${res.status}: ${(await res.text()).slice(0, 200)}`);
+async function putArt(env, b64, mime) {
+  const key = `img/${crypto.randomUUID()}.${mime.includes('jpeg') ? 'jpg' : 'png'}`;
+  await env.BUCKET.put(key, base64ToBytes(b64), { httpMetadata: { contentType: mime } });
+  return `/${key}`;
+}
 
-    const j = await res.json();
-    for (const c of j.candidates || []) {
-      for (const p of c.content?.parts || []) {
-        if (p.inlineData?.data) {
-          const mime = p.inlineData.mimeType || 'image/png';
-          const key = `img/${crypto.randomUUID()}.${mime.includes('jpeg') ? 'jpg' : 'png'}`;
-          await env.BUCKET.put(key, base64ToBytes(p.inlineData.data), { httpMetadata: { contentType: mime } });
-          return `/${key}`;
-        }
-      }
+async function artFromOpenAI(prompt, env) {
+  const res = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-image-2.5-flare', prompt,
+      size: '1024x1024', quality: 'high', output_format: 'jpeg', output_compression: 85, n: 1
+    }),
+    signal: AbortSignal.timeout(90000) // Flare runs ~20s; leave room for a slow day
+  });
+  if (!res.ok) throw new Error(`GPT Image ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const b64 = (await res.json()).data?.[0]?.b64_json;
+  if (!b64) throw new Error('GPT Image returned no image');
+  return putArt(env, b64, 'image/jpeg');
+}
+
+async function artFromGemini(prompt, env, model, aspect) {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'x-goog-api-key': env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { imageConfig: { aspectRatio: aspect } }
+      }),
+      signal: AbortSignal.timeout(55000)
     }
-    throw new Error('Nano Banana returned no image');
-  } finally {
-    clearTimeout(timer);
+  );
+  if (!res.ok) throw new Error(`Nano Banana ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = await res.json();
+  for (const c of j.candidates || []) {
+    for (const p of c.content?.parts || []) {
+      if (p.inlineData?.data) return putArt(env, p.inlineData.data, p.inlineData.mimeType || 'image/png');
+    }
+  }
+  throw new Error('Nano Banana returned no image');
+}
+
+// GPT Image 2.5 Flare draws the paper; Nano Banana 2 steps in when it can't.
+async function generateArticleImage(headline, env, providedScene = null, opts = {}) {
+  if (!env.OPENAI_API_KEY && !env.GEMINI_API_KEY) throw new Error('no image API key set');
+  const field = opts.field || ART_FIELDS[Math.floor(Math.random() * ART_FIELDS.length)];
+  const prompt = artPrompt(headline, providedScene, field);
+
+  let firstError = null;
+  if (env.OPENAI_API_KEY) {
+    try { return await artFromOpenAI(prompt, env); }
+    catch (e) { firstError = e; console.error('GPT Image failed, trying Nano Banana:', e.message); }
+  }
+  if (!env.GEMINI_API_KEY) throw firstError;
+  try {
+    return await artFromGemini(prompt, env, opts.model || 'gemini-3.1-flash-image', opts.aspect || '1:1');
+  } catch (e) {
+    throw firstError ? new Error(`${firstError.message} · ${e.message}`) : e;
   }
 }
 
@@ -821,12 +857,13 @@ async function ingestArticles(items, env) {
       ).bind(sourceId, item.headline, item.source_url, item.summary, item.published_at || null).first();
 
       const art = await env.DB.prepare(
-        `INSERT INTO articles (raw_article_id, source_id, headline, summary, body, headline_es, summary_es, body_es, category, source_name, source_url, image_url, published_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now'))) RETURNING id`
+        `INSERT INTO articles (raw_article_id, source_id, headline, summary, body, headline_es, summary_es, body_es, category, source_name, source_url, image_url, image_concept, published_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now'))) RETURNING id`
       ).bind(
         raw.id, sourceId, item.headline, item.summary, bodyEn,
         item.headline_es?.trim() || null, item.summary_es?.trim() || null, bodyEs || null,
-        item.category || 'general', item.source_name || 'Unknown', item.source_url, imageUrl, item.published_at || null
+        item.category || 'general', item.source_name || 'Unknown', item.source_url, imageUrl,
+        typeof item.image_concept === 'string' ? item.image_concept.trim() || null : null, item.published_at || null
       ).first();
 
       inserted++;
