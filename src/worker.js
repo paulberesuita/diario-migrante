@@ -1,4 +1,4 @@
-import { ORIGIN, esc, fechaLarga, portadaPage, edicionesPage, sitemapXml, notFoundPage, edicionMarkdown, llmsTxt, noticiaPage, noticiaMarkdown, noticiaPath } from './pages.js';
+import { ORIGIN, esc, fechaLarga, portadaPage, edicionesPage, sitemapXml, newsSitemapXml, feedXml, notFoundPage, edicionMarkdown, llmsTxt, noticiaPage, noticiaMarkdown, noticiaPath } from './pages.js';
 import { handleMCP } from './mcp.js';
 import { getFechas, getFecha, insertFechas, getProximas, calendarioPage, fechaPage, calendarioIcs, calendarioMarkdown, fechasEmailHtml, fechaPath } from './fechas.js';
 import { getHerramientas, getHerramienta, upsertHerramienta, herramientasPage, herramientaPage, herramientaMarkdown, herramientasMarkdown, herramientaPath } from './herramientas.js';
@@ -207,15 +207,34 @@ export default {
       }
 
       if (path === '/sitemap.xml') {
-        const { results: arts } = await env.DB.prepare(
-          'SELECT id, headline, headline_es, date(published_at) AS day FROM articles ORDER BY published_at DESC'
-        ).all();
-        const { results: fechas } = await env.DB.prepare(
-          "SELECT id, title, updated_at FROM fechas WHERE status != 'cancelada' ORDER BY day DESC"
-        ).all();
-        return new Response(sitemapXml(await getEditions(env), arts, fechas, await getHerramientas(env)), {
+        return new Response(await buildSitemap(env), {
           headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
         });
+      }
+
+      if (path === '/news-sitemap.xml') {
+        const { results } = await env.DB.prepare(
+          "SELECT id, headline, headline_es, image_url, published_at FROM articles WHERE published_at >= datetime('now', '-2 days') ORDER BY published_at DESC"
+        ).all();
+        return new Response(newsSitemapXml(results), {
+          headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=900' }
+        });
+      }
+
+      if (path === '/feed.xml') {
+        const { results } = await env.DB.prepare(
+          'SELECT id, headline, headline_es, summary, summary_es, category, source_name, source_url, image_url, published_at FROM articles ORDER BY published_at DESC, id DESC LIMIT 40'
+        ).all();
+        return new Response(feedXml(results), {
+          headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=900' }
+        });
+      }
+      if (['/rss.xml', '/rss', '/feed', '/atom.xml'].includes(path)) return Response.redirect(`${ORIGIN}/feed.xml`, 301);
+      if (path === '/changelog') return Response.redirect(`${ORIGIN}/changelog.md`, 302);
+
+      // IndexNow proves we own the host by serving its key at the root.
+      if (env.INDEXNOW_KEY && path === `/${env.INDEXNOW_KEY}.txt`) {
+        return new Response(env.INDEXNOW_KEY, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       }
 
       // Everything else (style.css, app.js, /registro, robots.txt…) is a
@@ -408,6 +427,13 @@ async function handleAPI(path, request, env) {
       const body = await request.json();
       const items = Array.isArray(body.articles) ? body.articles : [];
       const result = await ingestArticles(items, env);
+      if (result.inserted) {
+        const day = new Date().toISOString().slice(0, 10);
+        result.indexnow = await pingIndexNow(env, [
+          '/', '/ediciones', `/edicion/${day}`, '/feed.xml', ...(result.fechas ? ['/calendario'] : []), ...result.paths
+        ]);
+      }
+      delete result.paths;
       const notes = [];
       if (result.skipped) notes.push(`${result.skipped} duplicate${result.skipped === 1 ? '' : 's'} skipped`);
       if (result.errors.length) notes.push(`${result.errors.length} failed`);
@@ -422,6 +448,19 @@ async function handleAPI(path, request, env) {
       await postEvent(env, { type: 'error', title: 'Ingest crashed', body: e.message });
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
     }
+  }
+
+  // POST /api/indexnow — { paths: ["/noticia/…"] }, or no body to submit every sitemap URL.
+  if (path === '/api/indexnow' && request.method === 'POST') {
+    if (!checkAuth(request, env)) {
+      return new Response('{"error":"Unauthorized"}', { status: 401, headers });
+    }
+    let paths = (await request.json().catch(() => null))?.paths;
+    if (!Array.isArray(paths) || !paths.length) {
+      const xml = await buildSitemap(env);
+      paths = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1].replace(ORIGIN, '')).filter(p => p.startsWith('/'));
+    }
+    return new Response(JSON.stringify(await pingIndexNow(env, paths)), { headers });
   }
 
   // POST /api/backfill-images — generate art for articles missing it (?force=1 regenerates all).
@@ -789,6 +828,48 @@ async function generateArticleImage(headline, env, providedScene = null, opts = 
   }
 }
 
+async function buildSitemap(env) {
+  const { results: arts } = await env.DB.prepare(
+    'SELECT id, headline, headline_es, image_url, date(published_at) AS day FROM articles ORDER BY published_at DESC'
+  ).all();
+  const { results: fechas } = await env.DB.prepare(
+    "SELECT id, title, updated_at FROM fechas WHERE status != 'cancelada' ORDER BY day DESC"
+  ).all();
+  return sitemapXml(await getEditions(env), arts, fechas, await getHerramientas(env));
+}
+
+// ─── INDEXNOW ──────────────────────────────────────────────────────────
+// One POST tells Bing (and through it Copilot and ChatGPT search), Yandex,
+// Seznam and Naver which URLs are new. Never blocks or fails an ingest.
+// Any one IndexNow engine shares a submission with all the others. They
+// rate-limit Cloudflare's shared egress IPs unevenly, so try each in turn.
+const INDEXNOW_ENDPOINTS = ['https://www.bing.com/indexnow', 'https://yandex.com/indexnow', 'https://search.seznam.cz/indexnow', 'https://searchadvisor.naver.com/indexnow', 'https://api.indexnow.org/indexnow'];
+
+async function pingIndexNow(env, paths) {
+  if (!env.INDEXNOW_KEY || !paths.length) return { sent: 0 };
+  const body = JSON.stringify({
+    host: 'diariomigrante.com',
+    key: env.INDEXNOW_KEY,
+    keyLocation: `${ORIGIN}/${env.INDEXNOW_KEY}.txt`,
+    urlList: [...new Set(paths)].map(p => `${ORIGIN}${p}`)
+  });
+  const tried = [];
+  for (const endpoint of INDEXNOW_ENDPOINTS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body,
+        signal: AbortSignal.timeout(10000)
+      });
+      tried.push(`${new URL(endpoint).hostname} ${res.status}`);
+      if (res.status === 200 || res.status === 202) return { sent: paths.length, via: new URL(endpoint).hostname, tried };
+    } catch (e) {
+      tried.push(`${new URL(endpoint).hostname} ${e.message}`);
+    }
+  }
+  console.error('IndexNow: no engine accepted', tried.join(' · '));
+  return { sent: 0, tried };
+}
+
 // ─── INGEST (external agent submissions) ───────────────────────────────
 
 async function findOrCreateSource(item, env) {
@@ -811,6 +892,7 @@ async function ingestArticles(items, env) {
   let skipped = 0;
   let fechas = 0;
   const errors = [];
+  const paths = []; // the new stories' permalinks, for IndexNow
   // Art budget: five drawings per edition (Paul, 2026-08-12). The first five
   // stories get one each; on bigger days the rest run text-only.
   let artCount = 0;
@@ -857,16 +939,18 @@ async function ingestArticles(items, env) {
       ).bind(sourceId, item.headline, item.source_url, item.summary, item.published_at || null).first();
 
       const art = await env.DB.prepare(
-        `INSERT INTO articles (raw_article_id, source_id, headline, summary, body, headline_es, summary_es, body_es, category, source_name, source_url, image_url, image_concept, published_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now'))) RETURNING id`
+        `INSERT INTO articles (raw_article_id, source_id, headline, summary, body, headline_es, summary_es, body_es, category, source_name, source_url, image_url, image_concept, image_alt_es, published_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now'))) RETURNING id`
       ).bind(
         raw.id, sourceId, item.headline, item.summary, bodyEn,
         item.headline_es?.trim() || null, item.summary_es?.trim() || null, bodyEs || null,
         item.category || 'general', item.source_name || 'Unknown', item.source_url, imageUrl,
-        typeof item.image_concept === 'string' ? item.image_concept.trim() || null : null, item.published_at || null
+        typeof item.image_concept === 'string' ? item.image_concept.trim() || null : null,
+        typeof item.image_alt_es === 'string' ? item.image_alt_es.trim() || null : null, item.published_at || null
       ).first();
 
       inserted++;
+      paths.push(noticiaPath({ id: art.id, headline: item.headline, headline_es: item.headline_es?.trim() || null }));
 
       // The story's dates go on the calendar, linked back to the story.
       if (Array.isArray(item.fechas) && item.fechas.length) {
@@ -882,7 +966,7 @@ async function ingestArticles(items, env) {
     }
   }
 
-  return { success: true, received: items.length, inserted, skipped, fechas, errors };
+  return { success: true, received: items.length, inserted, skipped, fechas, errors, paths };
 }
 
 // ─── EMAIL SUBSCRIPTION (Resend) ───────────────────────────────────────

@@ -1,5 +1,11 @@
 # Diario Migrante Changelog
 
+## September 17, 2026 — El diario tiene feed
+
+- Follow the paper from any reader: **diariomigrante.com/feed.xml** carries the latest 40 stories, newest first, each with its summary, its source and its drawing.
+- Every story page now shows its date under the section name, and every drawing carries a description of what it shows for readers who use a screen reader.
+- For agents and search engines: a news sitemap at **/news-sitemap.xml** (the last 48 hours), drawings listed in the main sitemap, and a ping to the search engines the moment an edition lands.
+
 ## September 17, 2026 — Dibujos nuevos
 
 - The drawings are back, and they look different. Every story now gets a clear-line illustration, the look of a classic comic album: realistic drawing, clean black outlines, flat bright color, no shading. People have real proportions and real faces, and the backgrounds went from muted to vivid: cobalt, orange, yellow, emerald, coral.

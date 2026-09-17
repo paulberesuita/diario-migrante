@@ -20,6 +20,8 @@ crons = ["30 12 * * *", "0 14 * * *"]
 # tinybuild.studio is the studio-wide verified Resend domain. Flip to
 # "Diario Migrante <diario@diariomigrante.com>" if that domain gets verified on Resend.
 EMAIL_FROM = "Diario Migrante <diario@tinybuild.studio>"
+# IndexNow host key. Public by design: the Worker serves it at /<key>.txt.
+INDEXNOW_KEY = "54b3fbffacd5ba0ee928f31ac81adccc"
 
 [assets]
 directory = "public"

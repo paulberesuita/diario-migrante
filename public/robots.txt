@@ -3,5 +3,6 @@ Allow: /
 Content-Signal: search=yes, ai-input=yes
 
 Sitemap: https://diariomigrante.com/sitemap.xml
+Sitemap: https://diariomigrante.com/news-sitemap.xml
 
 # Agent guide: https://diariomigrante.com/llms.txt

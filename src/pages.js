@@ -116,6 +116,7 @@ export function headHtml({ title, description, canonical, ogType = 'website', og
   <meta name="twitter:card" content="summary_large_image">
   ${published ? `<meta property="article:published_time" content="${published}">` : ''}
   ${alternateMd ? `<link rel="alternate" type="text/markdown" href="${alternateMd}">` : ''}
+  <link rel="alternate" type="application/rss+xml" title="Diario Migrante" href="${ORIGIN}/feed.xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Libre+Franklin:wght@400..700&display=swap" rel="stylesheet">
@@ -198,6 +199,10 @@ function noticiaLd(a, url) {
 
 // ─── El pliego (portada de hoy y ediciones permanentes) ────────────────
 
+// Alt text describes the drawing (image_alt_es, written with the scene line);
+// older stories fall back to the headline.
+const altDibujo = a => a.image_alt_es ? `Ilustración: ${a.image_alt_es}` : `Ilustración de la noticia: ${a.headline_es || a.headline}`;
+
 function fuenteHtml(a) {
   const hora = formatHora(a.published_at);
   const texto = `${esc(a.source_name)}${hora ? ' · ' + hora : ''}`;
@@ -211,7 +216,7 @@ function historiaHtml(a) {
         <h3 class="col-tit"><a href="${noticiaPath(a)}">${esc(a.headline_es || a.headline)}</a></h3>
         <p class="col-resumen">${esc(a.summary_es || a.summary)}</p>
         ${fuenteHtml(a)}
-        ${a.image_url ? `<figure class="col-figura"><a href="${noticiaPath(a)}"><img src="${esc(a.image_url)}" alt="${esc(a.headline_es || a.headline)}" loading="lazy"></a></figure>` : ''}`;
+        ${a.image_url ? `<figure class="col-figura"><a href="${noticiaPath(a)}"><img src="${esc(a.image_url)}" alt="${esc(altDibujo(a))}" loading="lazy"></a></figure>` : ''}`;
 }
 
 export const SUSCRIBIR_COL = `<div class="col col-suscribir">
@@ -403,12 +408,12 @@ ${headHtml({ title, description: resumen, canonical: url, ogType: 'article', ogI
 
       <section class="nota">
         <div class="nota-texto">
-          <span class="kicker">${categoriaEs(a.category)}</span>
+          <span class="kicker">${categoriaEs(a.category)} · <time datetime="${isoDate(a.published_at)}">${fechaLarga(day)}</time></span>
           <h1 class="nota-tit">${esc(titular)}</h1>
           <p class="nota-resumen">${esc(resumen)}</p>
           ${a.source_url ? `<a class="nota-fuente" href="${esc(a.source_url)}" target="_blank" rel="noopener">Leer la nota original en ${esc(a.source_name)} ↗</a>` : `<span class="fuente">${esc(a.source_name)}</span>`}
         </div>
-        ${a.image_url ? `<figure class="nota-figura"><img src="${esc(a.image_url)}" alt="${esc(titular)}" width="1024" height="1024" loading="eager"></figure>` : ''}
+        ${a.image_url ? `<figure class="nota-figura"><img src="${esc(a.image_url)}" alt="${esc(altDibujo(a))}" width="1024" height="1024" loading="eager"></figure>` : ''}
       </section>
 
       ${cuerpo ? `<div class="regla-seccion"></div>
@@ -544,13 +549,59 @@ export function sitemapXml(eds, arts = [], fechas = [], herramientas = []) {
     ...herramientas.map(h => `<url><loc>${ORIGIN}/herramientas/${h.slug}</loc><lastmod>${(h.checked_at || h.updated_at || '').slice(0, 10)}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`),
     `<url><loc>${ORIGIN}/registro/</loc><changefreq>daily</changefreq></url>`,
     ...eds.map(e => `<url><loc>${ORIGIN}/edicion/${e.day}</loc><lastmod>${e.day}</lastmod></url>`),
-    ...arts.map(a => `<url><loc>${ORIGIN}${noticiaPath(a)}</loc><lastmod>${a.day}</lastmod></url>`),
+    ...arts.map(a => `<url><loc>${ORIGIN}${noticiaPath(a)}</loc><lastmod>${a.day}</lastmod>${a.image_url ? `<image:image><image:loc>${ORIGIN}${a.image_url}</image:loc></image:image>` : ''}</url>`),
     ...fechas.map(f => `<url><loc>${ORIGIN}/calendario/${f.id}/${slugify(f.title)}</loc>${f.updated_at ? `<lastmod>${f.updated_at.slice(0, 10)}</lastmod>` : ''}</url>`)
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls.join('\n')}
 </urlset>`;
+}
+
+// Google News sitemap: only the last 48 hours of stories, each with its
+// news:news block. This is what tells Google the site is a newspaper.
+export function newsSitemapXml(arts = []) {
+  const urls = arts.map(a => `<url><loc>${ORIGIN}${noticiaPath(a)}</loc>
+  <news:news><news:publication><news:name>Diario Migrante</news:name><news:language>es</news:language></news:publication>
+  <news:publication_date>${isoDate(a.published_at)}</news:publication_date><news:title>${esc(a.headline_es || a.headline)}</news:title></news:news>${a.image_url ? `
+  <image:image><image:loc>${ORIGIN}${a.image_url}</image:loc></image:image>` : ''}</url>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${urls.join('\n')}
+</urlset>`;
+}
+
+// RSS 2.0: the latest stories, newest first, summary in Spanish, the drawing
+// as enclosure. Feed readers, aggregators and crawlers learn of an edition here.
+export function feedXml(arts = []) {
+  const rfc822 = ts => new Date(isoDate(ts)).toUTCString();
+  const items = arts.map(a => {
+    const url = `${ORIGIN}${noticiaPath(a)}`;
+    return `<item>
+  <title>${esc(a.headline_es || a.headline)}</title>
+  <link>${url}</link>
+  <guid isPermaLink="true">${url}</guid>
+  <pubDate>${rfc822(a.published_at)}</pubDate>
+  <category>${esc(categoriaEs(a.category))}</category>
+  <description>${esc(a.summary_es || a.summary)}</description>${a.source_url ? `
+  <source url="${esc(a.source_url)}">${esc(a.source_name || '')}</source>` : ''}${a.image_url ? `
+  <enclosure url="${ORIGIN}${a.image_url}" type="image/${a.image_url.endsWith('.png') ? 'png' : 'jpeg'}" length="0"/>
+  <media:content url="${ORIGIN}${a.image_url}" medium="image" width="1024" height="1024"/>` : ''}
+</item>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+<channel>
+  <title>Diario Migrante</title>
+  <link>${ORIGIN}/</link>
+  <atom:link href="${ORIGIN}/feed.xml" rel="self" type="application/rss+xml"/>
+  <description>Las noticias de inmigración que importan hoy, en español claro. Una edición cada mañana.</description>
+  <language>es</language>
+  ${arts[0] ? `<lastBuildDate>${rfc822(arts[0].published_at)}</lastBuildDate>` : ''}
+  <image><url>${ORIGIN}/masthead-tinta.png</url><title>Diario Migrante</title><link>${ORIGIN}/</link></image>
+${items.join('\n')}
+</channel>
+</rss>`;
 }
 
 // ─── La superficie para agentes (markdown + llms.txt) ──────────────────
@@ -640,7 +691,8 @@ Servidor MCP (Streamable HTTP, sin autenticación) en \`${ORIGIN}/mcp\` — herr
 - [Las herramientas](${ORIGIN}/herramientas) — las páginas de referencia; cada una en \`/herramientas/:slug\`.
 - [El registro](${ORIGIN}/registro) — todo lo que llegó hoy, con hora y fuente.
 - Cada noticia: \`${ORIGIN}/noticia/:id/:slug\` — su propia página, con datos estructurados NewsArticle.
-- [Sitemap](${ORIGIN}/sitemap.xml) — todas las ediciones y noticias.
+- [Feed RSS](${ORIGIN}/feed.xml) — las últimas 40 noticias, la más nueva primero.
+- [Sitemap](${ORIGIN}/sitemap.xml) — todas las ediciones y noticias; [sitemap de noticias](${ORIGIN}/news-sitemap.xml) con las últimas 48 horas.
 - [Changelog](${ORIGIN}/changelog.md) — qué ha cambiado en el diario.
 `;
 }
